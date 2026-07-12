@@ -1,0 +1,735 @@
+{
+  "nodes": [
+    {
+      "id": "repo-a",
+      "label": "repo-a",
+      "change_pending": true
+    },
+    {
+      "id": "repo-b",
+      "label": "repo-b",
+      "change_pending": true
+    },
+    {
+      "id": "repo-c",
+      "label": "repo-c",
+      "change_pending": true
+    },
+    {
+      "id": "repo-d",
+      "label": "repo-d",
+      "change_pending": true
+    },
+    {
+      "id": "repo-e",
+      "label": "repo-e",
+      "change_pending": true
+    },
+    {
+      "id": "repo-h",
+      "label": "repo-h",
+      "change_pending": true
+    },
+    {
+      "id": "repo-i",
+      "label": "repo-i",
+      "change_pending": true
+    },
+    {
+      "id": "repo-j",
+      "label": "repo-j",
+      "change_pending": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "repo-b",
+      "to": "repo-a",
+      "match_pct": 60,
+      "upstream_file": "repo-b/main.tf",
+      "downstream_file": "repo-a/module.tf"
+    },
+    {
+      "from": "repo-b",
+      "to": "repo-d",
+      "match_pct": 60,
+      "upstream_file": "repo-b/main.tf",
+      "downstream_file": "repo-d/module.tf"
+    },
+    {
+      "from": "repo-c",
+      "to": "repo-b",
+      "match_pct": 60,
+      "upstream_file": "repo-c/main.tf",
+      "downstream_file": "repo-b/module.tf"
+    },
+    {
+      "from": "repo-c",
+      "to": "repo-d",
+      "match_pct": 60,
+      "upstream_file": "repo-c/main.tf",
+      "downstream_file": "repo-d/module.tf"
+    },
+    {
+      "from": "repo-h",
+      "to": "repo-c",
+      "match_pct": 60,
+      "upstream_file": "repo-h/main.tf",
+      "downstream_file": "repo-c/module.tf"
+    },
+    {
+      "from": "repo-h",
+      "to": "repo-i",
+      "match_pct": 60,
+      "upstream_file": "repo-h/main.tf",
+      "downstream_file": "repo-i/module.tf"
+    },
+    {
+      "from": "repo-h",
+      "to": "repo-j",
+      "match_pct": 60,
+      "upstream_file": "repo-h/main.tf",
+      "downstream_file": "repo-j/module.tf"
+    },
+    {
+      "from": "repo-i",
+      "to": "repo-b",
+      "match_pct": 60,
+      "upstream_file": "repo-i/main.tf",
+      "downstream_file": "repo-b/module.tf"
+    },
+    {
+      "from": "repo-i",
+      "to": "repo-d",
+      "match_pct": 60,
+      "upstream_file": "repo-i/main.tf",
+      "downstream_file": "repo-d/module.tf"
+    },
+    {
+      "from": "repo-i",
+      "to": "repo-e",
+      "match_pct": 60,
+      "upstream_file": "repo-i/main.tf",
+      "downstream_file": "repo-e/module.tf"
+    },
+    {
+      "from": "repo-j",
+      "to": "repo-c",
+      "match_pct": 60,
+      "upstream_file": "repo-j/main.tf",
+      "downstream_file": "repo-c/module.tf"
+    },
+    {
+      "from": "repo-j",
+      "to": "repo-e",
+      "match_pct": 60,
+      "upstream_file": "repo-j/main.tf",
+      "downstream_file": "repo-e/module.tf"
+    },
+    {
+      "from": "repo-j",
+      "to": "repo-h",
+      "match_pct": 60,
+      "upstream_file": "repo-j/main.tf",
+      "downstream_file": "repo-h/module.tf"
+    }
+  ],
+  "diffs": {
+    "repo-a": {
+      "file_tree": [
+        "repo-a/main.tf",
+        "repo-a/terragrunt.hcl"
+      ],
+      "patches": [
+        {
+          "path": "repo-a/terragrunt.hcl",
+          "label": "Primary change",
+          "diff": "--- a/repo-a/terragrunt.hcl\n+++ b/repo-a/terragrunt.hcl\n@@ -1,7 +1,7 @@\n terraform {\n-  source = \"git::ssh://git.example.com/terraform-modules//s3?ref=v1.0.0\"\n+  source = \"git::ssh://git.example.com/terraform-modules//s3?ref=v1.1.0\"\n }\n \n inputs = {\n-  bucket_name = \"app-bucket-old\"\n+  bucket_name = \"repo-a-bucket-secure\"\n }"
+        },
+        {
+          "path": "repo-a/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-a/main.tf\n+++ b/repo-a/main.tf\n@@ -3,6 +3,6 @@\n }\n \n resource \"aws_s3_bucket\" \"app_bucket\" {\n-  bucket = \"app-bucket-old\"\n+  bucket = \"repo-a-bucket-secure\"\n   acl    = \"private\"\n }"
+        }
+      ]
+    },
+    "repo-b": {
+      "file_tree": [
+        "repo-b/main.tf",
+        "repo-b/terragrunt.hcl"
+      ],
+      "patches": [
+        {
+          "path": "repo-b/terragrunt.hcl",
+          "label": "Primary change",
+          "diff": "--- a/repo-b/terragrunt.hcl\n+++ b/repo-b/terragrunt.hcl\n@@ -1,5 +1,5 @@\n terraform {\n-  source = \"git::ssh://git.example.com/terraform-modules//db?ref=v1.0.0\"\n+  source = \"git::ssh://git.example.com/terraform-modules//db?ref=v1.1.0\"\n }\n \n dependency \"repo-a\" {"
+        },
+        {
+          "path": "repo-b/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-b/main.tf\n+++ b/repo-b/main.tf\n@@ -1,4 +1,4 @@\n module \"storage\" {\n   source = \"../repo-d\"\n-  bucket = \"app-bucket-old\"\n+  bucket = \"repo-b-bucket-secure\"\n }"
+        }
+      ]
+    },
+    "repo-c": {
+      "file_tree": [
+        "repo-c/kustomization.yaml",
+        "repo-c/main.tf"
+      ],
+      "patches": [
+        {
+          "path": "repo-c/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-c/main.tf\n+++ b/repo-c/main.tf\n@@ -1,6 +1,6 @@\n resource \"aws_lambda_function\" \"processor\" {\n   function_name = \"processor\"\n-  s3_bucket     = \"app-bucket-old\"\n+  s3_bucket     = \"repo-c-bucket-secure\"\n   handler       = \"index.handler\"\n-  runtime       = \"nodejs18.x\"\n+  runtime       = \"nodejs20.x\"\n }"
+        },
+        {
+          "path": "repo-c/kustomization.yaml",
+          "label": "Required fix",
+          "diff": "--- a/repo-c/kustomization.yaml\n+++ b/repo-c/kustomization.yaml\n@@ -1,3 +1,4 @@\n+# simulated rollout update for repo-c\n resources:\n   - ../repo-b\n   - ../repo-d"
+        }
+      ]
+    },
+    "repo-d": {
+      "file_tree": [
+        "repo-d/main.tf"
+      ],
+      "patches": [
+        {
+          "path": "repo-d/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-d/main.tf\n+++ b/repo-d/main.tf\n@@ -1,3 +1,4 @@\n+# simulated change for repo-d\n resource \"aws_db_instance\" \"db\" {\n   identifier = \"app-db\"\n   engine     = \"postgres\""
+        }
+      ]
+    },
+    "repo-e": {
+      "file_tree": [
+        "repo-e/main.tf"
+      ],
+      "patches": [
+        {
+          "path": "repo-e/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-e/main.tf\n+++ b/repo-e/main.tf\n@@ -1,3 +1,4 @@\n+# simulated change for repo-e\n resource \"aws_ecs_service\" \"service\" {\n   name            = \"app-service\"\n   cluster         = \"default\""
+        }
+      ]
+    },
+    "repo-h": {
+      "file_tree": [
+        "repo-h/dependencies.yaml",
+        "repo-h/main.tf"
+      ],
+      "patches": [
+        {
+          "path": "repo-h/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-h/main.tf\n+++ b/repo-h/main.tf\n@@ -8,7 +8,7 @@\n \n resource \"aws_instance\" \"edge_gateway\" {\n   ami           = \"ami-0abcd1234\"\n-  instance_type = \"m5.4xlarge\"\n+  instance_type = \"m5.large\"\n }\n \n resource \"aws_security_group\" \"edge_ingress\" {\n@@ -18,6 +18,6 @@\n     from_port   = 8443\n     to_port     = 8443\n     protocol    = \"tcp\"\n-    cidr_blocks = [\"0.0.0.0/0\"]\n+    cidr_blocks = [\"10.42.0.0/16\"]\n   }\n }"
+        },
+        {
+          "path": "repo-h/dependencies.yaml",
+          "label": "Required fix",
+          "diff": "--- a/repo-h/dependencies.yaml\n+++ b/repo-h/dependencies.yaml\n@@ -1,3 +1,4 @@\n+# simulated rollout update for repo-h\n resources:\n   - ../repo-f\n   - ../repo-j"
+        }
+      ]
+    },
+    "repo-i": {
+      "file_tree": [
+        "repo-i/main.tf",
+        "repo-i/terragrunt.hcl"
+      ],
+      "patches": [
+        {
+          "path": "repo-i/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-i/main.tf\n+++ b/repo-i/main.tf\n@@ -14,11 +14,11 @@\n     from_port   = 443\n     to_port     = 443\n     protocol    = \"tcp\"\n-    cidr_blocks = [\"0.0.0.0/0\"]\n+    cidr_blocks = [\"10.42.0.0/16\"]\n   }\n }\n \n resource \"aws_instance\" \"analytics_worker\" {\n   ami           = \"ami-0abcd1234\"\n-  instance_type = \"m5.4xlarge\"\n+  instance_type = \"m5.large\"\n }"
+        }
+      ]
+    },
+    "repo-j": {
+      "file_tree": [
+        "repo-j/deploy.yaml",
+        "repo-j/main.tf"
+      ],
+      "patches": [
+        {
+          "path": "repo-j/main.tf",
+          "label": "Primary change",
+          "diff": "--- a/repo-j/main.tf\n+++ b/repo-j/main.tf\n@@ -9,7 +9,7 @@\n resource \"aws_db_instance\" \"warehouse\" {\n   identifier     = \"warehouse-primary\"\n   engine         = \"postgres\"\n-  instance_class = \"db.m5.2xlarge\"\n+  instance_class = \"db.t3.medium\"\n }\n \n resource \"aws_security_group\" \"warehouse_access\" {\n@@ -19,6 +19,6 @@\n     from_port   = 5432\n     to_port     = 5432\n     protocol    = \"tcp\"\n-    cidr_blocks = [\"0.0.0.0/0\"]\n+    cidr_blocks = [\"10.42.0.0/16\"]\n   }\n }"
+        },
+        {
+          "path": "repo-j/deploy.yaml",
+          "label": "Required fix",
+          "diff": "--- a/repo-j/deploy.yaml\n+++ b/repo-j/deploy.yaml\n@@ -1,2 +1,3 @@\n+# simulated rollout update for repo-j\n - ../repo-c\n - ../repo-e"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "description": "Engineering knowledge graph has been cleared."
+  },
+  "repo_details": {
+    "repo-a": {
+      "parents": [
+        "repo-b"
+      ],
+      "dependents": [],
+      "files": [
+        "repo-a/main.tf",
+        "repo-a/terragrunt.hcl"
+      ],
+      "description": "repo-a (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": false,
+      "cycle_paths": [],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_s3_bucket",
+            "name": "app_bucket"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [],
+        "module_sources": [],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [],
+        "terragrunt_inputs": [
+          "bucket_name"
+        ],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 1,
+        "module_count": 0,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-b": {
+      "parents": [
+        "repo-c",
+        "repo-i"
+      ],
+      "dependents": [
+        "repo-a",
+        "repo-d"
+      ],
+      "files": [
+        "repo-b/main.tf",
+        "repo-b/terragrunt.hcl"
+      ],
+      "description": "repo-b (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": false,
+      "cycle_paths": [],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [
+          {
+            "name": "storage",
+            "source": "../repo-d"
+          }
+        ],
+        "module_sources": [
+          "../repo-d"
+        ],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [
+          "repo-a"
+        ],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 0,
+        "module_count": 1,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-c": {
+      "parents": [
+        "repo-h",
+        "repo-j"
+      ],
+      "dependents": [
+        "repo-b",
+        "repo-d"
+      ],
+      "files": [
+        "repo-c/kustomization.yaml",
+        "repo-c/main.tf"
+      ],
+      "description": "repo-c (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": false,
+      "cycle_paths": [],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_lambda_function",
+            "name": "processor"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [],
+        "module_sources": [],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 1,
+        "module_count": 0,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-d": {
+      "parents": [
+        "repo-b",
+        "repo-c",
+        "repo-i"
+      ],
+      "dependents": [],
+      "files": [
+        "repo-d/main.tf"
+      ],
+      "description": "repo-d (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": false,
+      "cycle_paths": [],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_db_instance",
+            "name": "db"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [],
+        "module_sources": [],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 1,
+        "module_count": 0,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-e": {
+      "parents": [
+        "repo-i",
+        "repo-j"
+      ],
+      "dependents": [],
+      "files": [
+        "repo-e/main.tf"
+      ],
+      "description": "repo-e (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": false,
+      "cycle_paths": [],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_ecs_service",
+            "name": "service"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [],
+        "module_sources": [],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 1,
+        "module_count": 0,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-h": {
+      "parents": [
+        "repo-j"
+      ],
+      "dependents": [
+        "repo-c",
+        "repo-i",
+        "repo-j"
+      ],
+      "files": [
+        "repo-h/dependencies.yaml",
+        "repo-h/main.tf"
+      ],
+      "description": "repo-h (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": true,
+      "cycle_paths": [
+        [
+          "repo-h",
+          "repo-j",
+          "repo-h"
+        ]
+      ],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_instance",
+            "name": "edge_gateway"
+          },
+          {
+            "type": "aws_security_group",
+            "name": "edge_ingress"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [
+          {
+            "name": "messaging",
+            "source": "../repo-c"
+          },
+          {
+            "name": "observability",
+            "source": "../repo-i"
+          }
+        ],
+        "module_sources": [
+          "../repo-c",
+          "../repo-i"
+        ],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 2,
+        "module_count": 2,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-i": {
+      "parents": [
+        "repo-h"
+      ],
+      "dependents": [
+        "repo-b",
+        "repo-d",
+        "repo-e"
+      ],
+      "files": [
+        "repo-i/main.tf",
+        "repo-i/terragrunt.hcl"
+      ],
+      "description": "repo-i (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": false,
+      "cycle_paths": [],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_security_group",
+            "name": "analytics_ingress"
+          },
+          {
+            "type": "aws_instance",
+            "name": "analytics_worker"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [
+          {
+            "name": "shared_network",
+            "source": "../repo-d"
+          },
+          {
+            "name": "reporting",
+            "source": "../repo-e"
+          }
+        ],
+        "module_sources": [
+          "../repo-d",
+          "../repo-e"
+        ],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [
+          "repo-b"
+        ],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 2,
+        "module_count": 2,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    },
+    "repo-j": {
+      "parents": [
+        "repo-h"
+      ],
+      "dependents": [
+        "repo-c",
+        "repo-e",
+        "repo-h"
+      ],
+      "files": [
+        "repo-j/deploy.yaml",
+        "repo-j/main.tf"
+      ],
+      "description": "repo-j (downstream, owner: engineering-team) includes Terraform/Terragrunt configuration and depends on upstream repo parameters.",
+      "cycle": true,
+      "cycle_paths": [
+        [
+          "repo-h",
+          "repo-j",
+          "repo-h"
+        ]
+      ],
+      "owner_team": "engineering-team",
+      "repo_tier": "downstream",
+      "parsed_fields": {
+        "resources": [
+          {
+            "type": "aws_db_instance",
+            "name": "warehouse"
+          },
+          {
+            "type": "aws_security_group",
+            "name": "warehouse_access"
+          }
+        ],
+        "data_sources": [],
+        "variables": [],
+        "outputs": [],
+        "providers": [],
+        "modules": [
+          {
+            "name": "gateway",
+            "source": "../repo-h"
+          },
+          {
+            "name": "analytics_bridge",
+            "source": "../repo-g"
+          }
+        ],
+        "module_sources": [
+          "../repo-h",
+          "../repo-g"
+        ],
+        "backend_types": [],
+        "required_providers": [],
+        "locals": [],
+        "terragrunt_dependencies": [],
+        "terragrunt_dependency_blocks": [],
+        "terragrunt_inputs": [],
+        "terragrunt_remote_state_backends": [],
+        "terragrunt_includes": []
+      },
+      "summary": {
+        "resource_count": 2,
+        "module_count": 2,
+        "variable_count": 0,
+        "output_count": 0,
+        "provider_count": 0,
+        "data_source_count": 0,
+        "locals_count": 0
+      }
+    }
+  },
+  "cycles": [
+    [
+      "repo-h",
+      "repo-j",
+      "repo-h"
+    ]
+  ]
+}

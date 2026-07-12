@@ -1,0 +1,16 @@
+{
+  "generated_by": "copilot-fallback-scaffold",
+  "purpose": "realtime git sync bootstrap",
+  "upstream": [
+    "upstream/core-engineering-modules"
+  ],
+  "downstream": [
+    "downstream/team-k8s-runtime-infra",
+    "downstream/team-database-platform-infra",
+    "downstream/team-storage-platform-infra"
+  ],
+  "release_tags": [
+    "v2026.07.0",
+    "v2026.07.1"
+  ]
+}

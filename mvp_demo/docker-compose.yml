@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  mvp_api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5001"
+    volumes:
+      - ./api:/app/api
+      - ./sample_repos:/app/sample_repos
+      - ./sample_data.json:/app/sample_data.json
+      - ./web:/app/web:ro
+    environment:
+      - FLASK_ENV=development
+      - NEO4J_URL=http://localhost:7474
+      - NEO4J_BOLT_URL=bolt://host.docker.internal:7687
+      - NEO4J_USERNAME=neo4j
+      - NEO4J_PASSWORD=neo4j123
+      - MILVUS_URL=http://localhost:9091
+      - MILVUS_SYNC_URI=
+      - MILVUS_TOKEN=
+      - MILVUS_COLLECTION=engineering_repo_vectors
+      - MILVUS_VECTOR_DIMENSION=8
+      - POSTGRES_URL=postgresql://localhost:5432/tfengineering
+      - POSTGRES_DSN=
+    restart: unless-stopped

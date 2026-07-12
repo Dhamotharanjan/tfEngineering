@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tfengineering-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tfengineering-api
+  template:
+    metadata:
+      labels:
+        app: tfengineering-api
+    spec:
+      containers:
+        - name: api
+          image: tfengineering-api:latest
+          ports:
+            - containerPort: 8000

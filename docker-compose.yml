@@ -1,0 +1,132 @@
+services:
+  neo4j:
+    image: neo4j:5.20
+    container_name: tfengineering-neo4j
+    hostname: tfengineering-neo4j
+    extra_hosts:
+      - "tfengineering-neo4j:127.0.0.1"
+    environment:
+      NEO4J_AUTH: neo4j/neo4j123
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_security_allow__csv__import__from__file__urls: "true"
+      NEO4J_server_default__listen__address: 0.0.0.0
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    restart: unless-stopped
+    volumes:
+      - ./data/neo4j/data:/var/lib/neo4j/data
+      - ./data/neo4j/logs:/var/lib/neo4j/logs
+      - ./data/neo4j/conf:/var/lib/neo4j/conf
+      - ./data/neo4j/import:/var/lib/neo4j/import
+
+  postgres:
+    image: postgres:16
+    container_name: tfengineering-postgres
+    environment:
+      POSTGRES_DB: tfengineering
+      POSTGRES_USER: tfengineering
+      POSTGRES_PASSWORD: tfengineering123
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+
+  milvus:
+    image: milvusdb/milvus:v2.4.0
+    container_name: tfengineering-milvus
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_USE_EMBED: "true"
+      MINIO_ADDRESS: "minio:9000"
+      MINIO_ACCESS_KEY: "minioadmin"
+      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_USE_SSL: "false"
+    depends_on:
+      - minio
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    restart: unless-stopped
+    volumes:
+      - ./data/milvus:/var/lib/milvus
+
+  minio:
+    image: minio/minio:latest
+    container_name: tfengineering-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/minio:/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: tfengineering-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  api:
+    build: ./apps/api
+    container_name: tfengineering-api
+    ports:
+      - "8000:8000"
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j123
+      POSTGRES_DSN: postgresql://tfengineering:tfengineering123@postgres:5432/tfengineering
+      REDIS_URL: redis://redis:6379/0
+      MILVUS_URI: http://milvus:19530
+    depends_on:
+      - neo4j
+      - postgres
+      - milvus
+      - redis
+    restart: unless-stopped
+
+  worker:
+    build: ./apps/worker
+    container_name: tfengineering-worker
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j123
+      POSTGRES_DSN: postgresql://tfengineering:tfengineering123@postgres:5432/tfengineering
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - neo4j
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  parser:
+    build: ./services/parsers
+    container_name: tfengineering-parser
+    environment:
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: neo4j123
+      POSTGRES_DSN: postgresql://tfengineering:tfengineering123@postgres:5432/tfengineering
+    depends_on:
+      - neo4j
+      - postgres
+    restart: "no"
+
+  web:
+    build: ./apps/web
+    container_name: tfengineering-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+networks: {}

@@ -1,0 +1,914 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>TFEngineering MVP Portal</title>
+  <script type="text/javascript" src="https://unpkg.com/vis-network@9.1.2/dist/vis-network.min.js"></script>
+  <link href="https://unpkg.com/vis-network@9.1.2/styles/vis-network.min.css" rel="stylesheet" />
+  <style>
+    :root{--bg:#0f172a;--card:#0b1220;--accent:#06b6d4;--muted:#94a3b8;--success:#10b981;--danger:#ef4444;--warning:#f59e0b}
+    html,body{height:100%;}
+    body { font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial; margin: 0; padding: 0; background: linear-gradient(180deg,#071029 0%, #071738 100%); color:#e6eef6 }
+    header{padding:18px 24px; display:flex; align-items:center; justify-content:space-between; gap:16px}
+    h1{margin:0;font-size:20px}
+    #app{max-width:1200px;margin:12px auto;padding:12px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.05); padding:18px; border-radius:14px; box-shadow:0 20px 40px rgba(0,0,0,0.12)}
+    .panel-grid { display:grid; grid-template-columns:1.15fr 0.85fr; gap:16px; margin-top:16px; align-items:start }
+    .step-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:16px }
+    .step-card{background:rgba(255,255,255,0.04);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.05);}
+    .step-title{font-size:13px;color:var(--muted)}
+    .step-detail{font-size:15px;font-weight:700;margin-top:8px}
+    .badge{background:rgba(255,255,255,0.08);padding:8px 12px;border-radius:999px;font-size:12px;color:#e6eef6}
+    .action-row{display:flex;gap:10px;flex-wrap:wrap}
+    textarea{width:100%;min-height:140px;margin-top:14px;padding:16px;border-radius:14px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:#e6eef6;font-family:monospace;font-size:14px;resize:vertical}
+    button{padding:10px 16px;border-radius:12px;border:none;cursor:pointer;background:var(--accent);color:#042029;font-weight:700;transition:transform .15s ease,background .15s ease}
+    button:hover{transform:translateY(-1px);}
+    button.secondary{background:transparent;color:var(--accent);border:1px solid rgba(255,255,255,0.18)}
+    pre{background:#020f19;padding:16px;border-radius:12px;overflow:auto;max-height:260px;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.5}
+    .diff-line{display:block;padding:0 8px}
+    .added{background:rgba(16,185,129,0.12);color:#a7f3d0}
+    .removed{background:rgba(239,68,68,0.12);color:#fecaca}
+    .info-block{margin-top:12px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:12px;}
+    .table {width:100%;border-collapse:collapse;margin-top:12px}
+    .table th,.table td{padding:10px 8px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.06)}
+    .priority-high{color:#f97316;font-weight:700}
+    #network{height:540px;border-radius:16px;background:radial-gradient(circle at top, rgba(14,165,233,0.08), rgba(15,23,42,0.2) 45%, rgba(15,23,42,0.95) 100%);border:1px solid rgba(125,211,252,0.12)}
+    .graph-header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+    .graph-title{font-size:15px;font-weight:700}
+    .graph-subtitle{font-size:12px;color:var(--muted);margin-top:4px}
+    .graph-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .graph-action-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 12px}
+    .legend{display:flex;gap:8px;flex-wrap:wrap}
+    .legend-chip{padding:6px 10px;border-radius:999px;font-size:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#dbeafe}
+    .small-btn{padding:8px 10px;font-size:12px;border-radius:10px}
+    .graph-diff-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(320px,0.9fr);gap:16px;align-items:start}
+    .diff-stack{display:flex;flex-direction:column;gap:12px}
+    .status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+    .status-row{display:flex;gap:8px;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;margin-top:10px}
+    .status-row .status-chip{min-width:150px;flex:0 0 auto}
+    .status-chip{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06)}
+    .status-name{font-size:12px;color:#cbd5e1}
+    .status-meta{font-size:12px;color:#a5f3fc;margin-top:4px}
+    .diff-header{color:#94a3b8;background:rgba(148,163,184,0.08)}
+    .diff-hunk{color:#67e8f9;background:rgba(34,211,238,0.08)}
+    .tree-root,.tree-root ul{list-style:none;padding-left:16px;margin:6px 0 0}
+    .tree-root{padding-left:0}
+    .tree-file,.tree-folder{font-size:13px;color:#dbeafe;margin:4px 0}
+    .tree-folder{color:#93c5fd;font-weight:700}
+    .query-block{margin-top:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)}
+    .query-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .neo4j-card .query-block{display:block;width:100%}
+    .query-title{font-size:12px;color:#93c5fd;font-weight:700}
+    .query-cypher{font-size:12px;color:#a5b4fc;margin-top:6px;white-space:pre-wrap;word-break:break-word}
+    .validation-run{margin-top:10px;padding:10px;border-radius:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)}
+    .validation-head{font-size:12px;color:#93c5fd;font-weight:700}
+    .validation-meta{font-size:12px;color:#cbd5e1;margin-top:6px}
+    .insight-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .insight-card{padding:10px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06)}
+    .insight-card.full-span{grid-column:1/-1}
+    .neo4j-card .query-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .graph-panel{position:sticky;top:10px}
+    @media (max-width: 980px){
+      .panel-grid{grid-template-columns:1fr}
+      .graph-diff-grid{grid-template-columns:1fr}
+      #network{height:min(56vh,520px)}
+      .insight-grid{grid-template-columns:1fr}
+      .query-grid{grid-template-columns:1fr}
+    }
+    @media (min-width: 981px){
+      #network{height:clamp(420px,62vh,760px)}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>TFEngineering — MVP Portal</h1>
+      <div style="color:var(--muted);font-size:14px;">Upload repos, analyze Terraform/Terragrunt dependencies, and rank security impact.</div>
+    </div>
+    <div class="badge">AI impact ranking + diff visualization</div>
+  </header>
+  <div id="app">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:15px;font-weight:700;">Repo list input</div>
+          <div style="color:var(--muted);font-size:13px;margin-top:4px;">Enter repository folder paths or repo names and click Analyze.</div>
+        </div>
+        <div class="action-row">
+          <button id="loadSampleBtn" class="secondary">Load Complex Repo List</button>
+          <button id="clearDataBtn" class="secondary">Clear Neo4j / Milvus / PGSQL Data</button>
+          <button id="uploadBtn" class="secondary">Analyze Repo List</button>
+        </div>
+      </div>
+      <textarea id="repoInput" placeholder="D:/TFEngineering/mvp_demo/sample_repos/repo-a\nD:/TFEngineering/mvp_demo/sample_repos/repo-b\nD:/TFEngineering/mvp_demo/sample_repos/repo-c\nD:/TFEngineering/mvp_demo/sample_repos/repo-d\nD:/TFEngineering/mvp_demo/sample_repos/repo-e\nD:/TFEngineering/mvp_demo/sample_repos/repo-f\nD:/TFEngineering/mvp_demo/sample_repos/repo-g\nD:/TFEngineering/mvp_demo/sample_repos/repo-h\nD:/TFEngineering/mvp_demo/sample_repos/repo-i\nD:/TFEngineering/mvp_demo/sample_repos/repo-j"></textarea>
+      <div id="uploadSteps" class="step-grid"></div>
+    </div>
+
+    <div class="panel-grid">
+      <div class="card graph-panel">
+        <div class="info-block" style="margin-top:0;">
+          <div style="font-size:14px;font-weight:700;">AI Approval Intelligence</div>
+          <div id="approvalHeadline" style="margin-top:8px;color:#c9d9e8;font-size:13px;">Select a repo to generate approval intelligence.</div>
+          <div id="approvalRationale" style="margin-top:8px;color:#e6eef6;font-size:12px;"></div>
+          <div id="approvalPlatformSummary" class="status-grid" style="margin-top:10px;">
+            <div class="status-chip"><div class="status-name">Neo4j risk</div><div class="status-meta">pending</div></div>
+            <div class="status-chip"><div class="status-name">PostgreSQL context</div><div class="status-meta">pending</div></div>
+            <div class="status-chip"><div class="status-name">Milvus neighbors</div><div class="status-meta">pending</div></div>
+          </div>
+          <pre id="approvalDetails" style="margin-top:10px;max-height:320px;">No approval context generated yet.</pre>
+        </div>
+        <div class="graph-header">
+          <div>
+            <div class="graph-title">Repository Dependency Map</div>
+            <div class="graph-subtitle">Short repo labels, cycle highlighting, and hierarchical dependency flow.</div>
+          </div>
+          <div class="graph-controls">
+            <button id="rearrangeGraphBtn" class="secondary small-btn">Re-arrange Graph</button>
+            <div class="legend">
+              <div class="legend-chip">Blue: active repo</div>
+              <div class="legend-chip">Red: change pending</div>
+              <div class="legend-chip">Amber border: cycle detected</div>
+            </div>
+          </div>
+        </div>
+        <div class="graph-action-row">
+          <div><strong>Selected Repo:</strong> <span id="selected">(none)</span></div>
+          <div style="display:flex;align-items:center;gap:12px;"><button id="approveBtn" disabled>Approve Change</button><button id="simulateBtn" class="secondary" disabled>Simulate Rollout</button></div>
+        </div>
+        <div class="info-block" style="margin-top:0;">
+          <div style="font-size:14px;font-weight:700;">AI Security Suggestion</div>
+          <div id="aiSuggestion" style="margin-top:10px;color:#e2e8f0;">Select a repo to view AI security recommendation.</div>
+        </div>
+        <div class="graph-diff-grid">
+          <div id="network"></div>
+          <div class="diff-stack">
+            <div class="info-block" style="margin-top:0;">
+              <div style="font-size:14px;font-weight:700;">Exact Diff View</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:6px;">Git-style unified diff with exact removed and added lines during rollout simulation.</div>
+            </div>
+            <div class="info-block" style="margin-top:0;">
+              <div style="font-size:13px;font-weight:700;">File Tree</div>
+              <div id="diffFileTree"></div>
+            </div>
+            <div class="info-block" style="margin-top:0;">
+              <div style="font-size:13px;font-weight:700;">Unified Patch</div>
+              <pre id="diffPatch"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" style="display:flex;flex-direction:column;gap:16px;">
+        <div class="info-block">
+          <div><strong>Downstream impact:</strong> <span id="affected">0</span> repos</div>
+          <div><strong>Impact score:</strong> <span id="percent">0</span>%</div>
+          <div id="status" style="margin-top:8px;color:var(--muted);">Idle</div>
+          <div id="progress" style="margin-top:12px;height:10px;background:rgba(255,255,255,0.08);border-radius:8px;overflow:hidden;">
+            <div id="progressInner" style="width:0%;height:100%;background:linear-gradient(90deg,var(--accent),var(--success));transition:width 300ms ease"></div>
+          </div>
+          <div id="progressLabel" style="font-size:12px;color:#94a3b8;margin-top:6px;">Waiting for upload</div>
+          <div id="progressSummary" style="font-size:12px;color:#cbd5e1;margin-top:6px;">0 of 7 steps completed · 7 steps remaining</div>
+          <div id="summaryNodes" style="font-size:12px;color:#a5f3fc;margin-top:8px;">Nodes discovered: 0</div>
+          <div id="summaryEdges" style="font-size:12px;color:#a5f3fc;margin-top:4px;">Dependencies identified: 0</div>
+          <div id="summaryVectors" style="font-size:12px;color:#a5f3fc;margin-top:4px;">Milvus vectors built: 0</div>
+          <div id="summaryPgTables" style="font-size:12px;color:#a5f3fc;margin-top:4px;">PostgreSQL tables tracked: 0</div>
+          <div id="summaryPlatformSync" style="font-size:12px;color:#a5f3fc;margin-top:4px;">Platform sync: pending</div>
+          <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+            <a id="neo4jLink" href="http://localhost:7474" target="_blank" class="secondary" style="padding:8px 12px;">Neo4j endpoint</a>
+            <a id="milvusLink" href="http://localhost:9091" target="_blank" class="secondary" style="padding:8px 12px;">Milvus API endpoint</a>
+          </div>
+        </div>
+        <div class="info-block">
+          <div style="font-size:14px;font-weight:700;">Platform Sync Status</div>
+          <div id="platformSyncStatus" class="status-grid">
+            <div class="status-chip"><div class="status-name">Neo4j</div><div class="status-meta">pending</div></div>
+            <div class="status-chip"><div class="status-name">PostgreSQL</div><div class="status-meta">pending</div></div>
+            <div class="status-chip"><div class="status-name">Milvus</div><div class="status-meta">pending</div></div>
+          </div>
+        </div>
+        <div class="info-block">
+          <div style="font-size:14px;font-weight:700;">Data Insights</div>
+          <div class="insight-grid" style="margin-top:10px;">
+            <div class="insight-card full-span">
+              <div style="font-size:13px;font-weight:700;">Vector DB Details</div>
+              <div id="milvusUrl" style="margin-top:8px;color:#c9d9e8;font-size:13px;">http://localhost:9091</div>
+              <div id="milvusNote" style="margin-top:6px;color:#94a3b8;font-size:12px;">Milvus endpoint note will appear here.</div>
+              <div id="vectorDbDetails" class="status-grid">
+                <div class="status-chip"><div class="status-name">Waiting for upload</div><div class="status-meta">No vector collection stats yet</div></div>
+              </div>
+            </div>
+            <div class="insight-card full-span neo4j-card">
+              <div style="font-size:13px;font-weight:700;">Neo4j Cypher Insights</div>
+              <div id="neo4jInsightSummary" style="margin-top:8px;color:#c9d9e8;font-size:13px;">Waiting for graph sync</div>
+              <div id="neo4jInsights" style="margin-top:8px;"></div>
+            </div>
+            <div class="insight-card full-span">
+              <div style="font-size:13px;font-weight:700;">PostgreSQL Table Status</div>
+              <div id="postgresUrl" style="margin-top:8px;color:#c9d9e8;font-size:13px;">postgresql://localhost:5432/tfengineering</div>
+              <div id="postgresTables" class="status-grid">
+                <div class="status-chip"><div class="status-name">Waiting for upload</div><div class="status-meta">No PostgreSQL table stats yet</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="info-block">
+          <div style="font-size:14px;font-weight:700;">AI Security Ranking</div>
+          <table class="table" id="rankingTable">
+            <thead><tr><th>Repo</th><th>Score</th><th>Severity</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="info-block">
+          <div style="font-size:14px;font-weight:700;">Terraform / Terragrunt Validation</div>
+          <div id="validationSummary" style="margin-top:8px;color:#c9d9e8;font-size:13px;">Run simulation to capture validation output.</div>
+          <div id="validationOutput"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let graph = null;
+    let network = null;
+    let selected = null;
+    let evtSource = null;
+    let graphDirection = 'UD';
+    let platformConfig = { neo4j_url: 'http://localhost:7474', milvus_url: 'http://localhost:9091', milvus_ui_note: 'Milvus on port 9091 is typically an API endpoint, not a built-in browser UI.', postgres_url: 'postgresql://localhost:5432/tfengineering' };
+    let uploadState = { completedStep: 0, totalSteps: 7, active: false };
+
+    async function loadGraph(){
+      const res = await fetch('/api/graph');
+      graph = await res.json();
+      render();
+      await loadNeo4jInsights(selected);
+    }
+
+    async function loadNeo4jInsights(repo){
+      const url = repo ? `/api/neo4j_insights?repo=${encodeURIComponent(repo)}` : '/api/neo4j_insights';
+      try {
+        const res = await fetch(url);
+        const payload = await res.json();
+        renderNeo4jInsights(payload);
+      } catch (err) {
+        renderNeo4jInsights({status: 'failed', error: String(err), queries: []});
+      }
+    }
+
+    async function loadConfig(){
+      const res = await fetch('/api/config');
+      if (!res.ok) return;
+      platformConfig = await res.json();
+      document.getElementById('neo4jLink').href = platformConfig.neo4j_url;
+      document.getElementById('milvusLink').href = platformConfig.milvus_url;
+      document.getElementById('milvusUrl').textContent = platformConfig.milvus_url;
+      document.getElementById('milvusNote').textContent = platformConfig.milvus_ui_note;
+      document.getElementById('postgresUrl').textContent = platformConfig.postgres_url;
+    }
+
+    async function loadSampleRepoList(){
+      const res = await fetch('/api/sample_repo_list');
+      if (!res.ok) return;
+      const data = await res.json();
+      document.getElementById('repoInput').value = (data.repos || []).join('\n');
+    }
+
+    function shortRepoName(value){
+      const normalized = String(value || '').replace(/\\/g, '/');
+      const parts = normalized.split('/').filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : value;
+    }
+
+    function render(){
+      const cycleRepos = new Set((graph.cycles || []).flat());
+      const nodes = graph.nodes.map(n => ({
+        id: n.id,
+        label: shortRepoName(n.label),
+        title: `${shortRepoName(n.label)}\n${graph.repo_details?.[n.id]?.description || 'Repository node'}`,
+        shape: 'box',
+        margin: 10,
+        borderWidth: cycleRepos.has(n.id) ? 3 : 1,
+        color: n.change_pending
+          ? {background:'#fecaca', border: cycleRepos.has(n.id) ? '#f59e0b' : '#ef4444', highlight:{background:'#fecaca', border:'#f97316'}}
+          : {background:'#bfdbfe', border: cycleRepos.has(n.id) ? '#f59e0b' : '#2563eb', highlight:{background:'#dbeafe', border:'#1d4ed8'}},
+        font: {color:'#0f172a', size:14, face:'Segoe UI', bold:true}
+      }));
+      const edges = graph.edges.map(e => ({
+        from: e.from,
+        to: e.to,
+        arrows: 'to',
+        smooth: {type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.4},
+        color: {color: '#7dd3fc', highlight: '#38bdf8'},
+        width: Math.max(2, Math.round((e.match_pct || 50) / 25)),
+        label: `${e.match_pct || 0}%`,
+        font: {align:'middle', color:'#bae6fd', size:11, strokeWidth:0},
+        title: `${shortRepoName(e.from)} → ${shortRepoName(e.to)}\nMatch: ${e.match_pct || 0}%\n${e.upstream_file || ''} → ${e.downstream_file || ''}`
+      }));
+      const container = document.getElementById('network');
+      const data = { nodes: nodes, edges: edges };
+      const options = {
+        autoResize: true,
+        interaction: { hover: true, tooltipDelay: 120, navigationButtons: true, keyboard: true },
+        layout: {
+          hierarchical: {
+            enabled: true,
+            direction: graphDirection,
+            sortMethod: 'directed',
+            nodeSpacing: 180,
+            levelSeparation: 120,
+            treeSpacing: 220,
+            blockShifting: true,
+          }
+        },
+        physics: false,
+        edges: {selectionWidth: 3},
+      };
+      network = new vis.Network(container, data, options);
+      network.fit({animation: {duration: 500, easingFunction: 'easeInOutQuad'}});
+
+      network.on('click', params => {
+        if (params.nodes.length){
+          selected = params.nodes[0];
+          document.getElementById('selected').textContent = selected;
+          document.getElementById('approveBtn').disabled = false;
+          document.getElementById('simulateBtn').disabled = false;
+          updateStats(selected);
+        } else {
+          selected = null;
+          document.getElementById('selected').textContent = '(none)';
+          document.getElementById('approveBtn').disabled = true;
+          document.getElementById('simulateBtn').disabled = true;
+          document.getElementById('affected').textContent = '0';
+          document.getElementById('percent').textContent = '0';
+        }
+      });
+    }
+
+    function autoFitGraph(){
+      if (!network) return;
+      network.redraw();
+      network.fit({animation: {duration: 350, easingFunction: 'easeInOutQuad'}});
+    }
+
+    function rearrangeGraph(){
+      if (!network) return;
+      const directions = ['UD', 'LR', 'DU', 'RL'];
+      const currentIndex = directions.indexOf(graphDirection);
+      graphDirection = directions[(currentIndex + 1) % directions.length];
+      render();
+      document.getElementById('status').textContent = `Graph rearranged (${graphDirection})`;
+      setTimeout(() => {
+        if (document.getElementById('status').textContent.startsWith('Graph rearranged')) {
+          document.getElementById('status').textContent = 'Idle';
+        }
+      }, 1500);
+    }
+
+    async function updateStats(repo){
+      const res = await fetch('/api/stats?repo=' + encodeURIComponent(repo));
+      const s = await res.json();
+      document.getElementById('affected').textContent = s.affected_count;
+      document.getElementById('percent').textContent = s.percent_affected;
+      renderRepoDetail(repo);
+      await loadNeo4jInsights(repo);
+      await loadApprovalInsight(repo);
+    }
+
+    async function loadApprovalInsight(repo){
+      if (!repo) return;
+      try {
+        const res = await fetch('/api/approval_insight?repo=' + encodeURIComponent(repo));
+        const payload = await res.json();
+        if (!res.ok || payload.error) {
+          renderApprovalInsight(null, payload.error || 'Unable to load approval insight');
+          return;
+        }
+        renderApprovalInsight(payload.insight);
+      } catch (err) {
+        renderApprovalInsight(null, String(err));
+      }
+    }
+
+    function renderApprovalInsight(insight, error){
+      const headline = document.getElementById('approvalHeadline');
+      const rationale = document.getElementById('approvalRationale');
+      const summary = document.getElementById('approvalPlatformSummary');
+      const details = document.getElementById('approvalDetails');
+      if (error){
+        headline.textContent = `Approval intelligence failed: ${error}`;
+        rationale.textContent = '';
+        summary.innerHTML = '<div class="status-chip"><div class="status-name">Status</div><div class="status-meta">failed</div></div>';
+        details.textContent = error;
+        return;
+      }
+      if (!insight){
+        headline.textContent = 'Select a repo to generate approval intelligence.';
+        rationale.textContent = '';
+        summary.innerHTML = '<div class="status-chip"><div class="status-name">Status</div><div class="status-meta">pending</div></div>';
+        details.textContent = 'No approval context generated yet.';
+        return;
+      }
+      const terraform = insight.terraform_change || {};
+      const security = insight.security_impact || {};
+      const cost = insight.cost_impact || {};
+      const touchedFiles = (terraform.touched_files || []).join(', ') || 'none';
+      const securityFindings = (security.findings || []).map(item => `- ${item}`).join('\n') || '- No findings';
+      const replacements = (cost.resource_replacements || []).map(item => `- ${item.from} -> ${item.to} (${item.monthly_delta_usd >= 0 ? '+' : ''}${item.monthly_delta_usd} USD/month)`).join('\n') || '- No known resource class replacement';
+      headline.textContent = `${insight.repo}: ${insight.recommendation} · risk score ${insight.risk_score}/100`;
+      rationale.innerHTML = (insight.rationale || []).map(item => `• ${item}`).join('<br>');
+      summary.innerHTML = `
+        <div class="status-chip"><div class="status-name">Neo4j risk</div><div class="status-meta">${insight.neo4j?.status || 'pending'} · out-of-sync ${insight.neo4j?.out_of_sync_count || 0}</div></div>
+        <div class="status-chip"><div class="status-name">PostgreSQL context</div><div class="status-meta">${insight.postgres?.status || 'pending'} · downstream ${insight.postgres?.downstream_count || 0}</div></div>
+        <div class="status-chip"><div class="status-name">Milvus neighbors</div><div class="status-meta">${insight.milvus?.status || 'pending'} · neighbors ${(insight.milvus?.neighbors || []).length}</div></div>
+      `;
+      details.textContent = [
+        'Terraform Change Detail',
+        `- Touched files: ${touchedFiles}`,
+        `- Added lines: ${terraform.added_line_count || 0}`,
+        `- Removed lines: ${terraform.removed_line_count || 0}`,
+        `- Parameter updates: ${(terraform.parameter_updates || []).length}`,
+        '',
+        'Security Impact',
+        `- Severity: ${security.severity || 'unknown'} (score ${security.security_score || 0})`,
+        securityFindings,
+        '',
+        'Cost Impact',
+        `- Estimated monthly savings: ${cost.estimated_monthly_savings_usd || 0} USD`,
+        `- Estimated monthly increase: ${cost.estimated_monthly_increase_usd || 0} USD`,
+        `- Summary: ${cost.summary || 'n/a'}`,
+        replacements,
+      ].join('\n');
+    }
+
+    function setUploadProgress(percent, label){
+      document.getElementById('progressInner').style.width = `${percent}%`;
+      document.getElementById('progressLabel').textContent = label || `${percent}% complete`;
+    }
+
+    function setProgressSummary(step, totalSteps, message){
+      const normalizedTotal = totalSteps || uploadState.totalSteps || 7;
+      const completed = Math.max(0, Math.min(step || 0, normalizedTotal));
+      const remaining = Math.max(0, normalizedTotal - completed);
+      uploadState.completedStep = completed;
+      uploadState.totalSteps = normalizedTotal;
+      const baseLabel = `${completed} of ${normalizedTotal} steps completed · ${remaining} steps remaining`;
+      document.getElementById('progressSummary').textContent = message ? `${baseLabel} · ${message}` : baseLabel;
+    }
+
+    function updateUploadSummary(nodes, edges, vectors){
+      if (nodes !== undefined) document.getElementById('summaryNodes').textContent = `Nodes discovered: ${nodes}`;
+      if (edges !== undefined) document.getElementById('summaryEdges').textContent = `Dependencies identified: ${edges}`;
+      if (vectors !== undefined) document.getElementById('summaryVectors').textContent = `Milvus vectors built: ${vectors}`;
+    }
+
+    function renderNeo4jInsights(payload){
+      const summaryEl = document.getElementById('neo4jInsightSummary');
+      const container = document.getElementById('neo4jInsights');
+      if (!payload || payload.status === 'not_configured'){
+        summaryEl.textContent = 'Neo4j not configured for read-back insights';
+        container.innerHTML = '<div class="status-meta">Set NEO4J_BOLT_URL to enable Cypher output.</div>';
+        return;
+      }
+      if (payload.status === 'failed'){
+        summaryEl.textContent = `Neo4j insight query failed: ${payload.error || 'unknown error'}`;
+        container.innerHTML = '';
+        return;
+      }
+      const summary = payload.summary || {};
+      summaryEl.textContent = `Repos: ${summary.total_repos || 0} · Dependencies: ${summary.total_dependencies || 0} · Out-of-sync: ${summary.out_of_sync_dependencies || 0}`;
+      const preferredQuery = (payload.queries || []).find(query => query.name === 'Top Out-of-Sync Dependencies') || (payload.queries || [])[0];
+      const queryList = preferredQuery ? [preferredQuery] : [];
+      container.innerHTML = `${queryList.map(query => `
+        <div class="query-block">
+          <div class="query-title">${query.name}</div>
+          <div class="query-cypher">${query.cypher}</div>
+          <pre>${JSON.stringify(query.rows || [], null, 2)}</pre>
+        </div>
+      `).join('')}`;
+    }
+
+    function renderValidation(validation){
+      if (!validation) return;
+      const summary = document.getElementById('validationSummary');
+      const container = document.getElementById('validationOutput');
+      summary.textContent = `${validation.repo}: ${validation.status} · ${validation.message}`;
+      const entries = validation.results || [];
+      container.innerHTML = entries.map(entry => `
+        <div class="validation-run">
+          <div class="validation-head">${entry.command}</div>
+          <div class="validation-meta">Status: ${entry.status}${entry.exit_code !== null && entry.exit_code !== undefined ? ` · Exit: ${entry.exit_code}` : ''}</div>
+          <pre>${(entry.stdout || '') + ((entry.stderr || '') ? `\n${entry.stderr}` : '')}</pre>
+        </div>
+      `).join('');
+    }
+
+    function buildFileTree(paths){
+      const root = {};
+      paths.forEach(path => {
+        const parts = String(path || '').split('/').filter(Boolean);
+        let cursor = root;
+        parts.forEach((part, index) => {
+          cursor[part] = cursor[part] || { __children: {}, __file: index === parts.length - 1 };
+          if (index === parts.length - 1) {
+            cursor[part].__file = true;
+          }
+          cursor = cursor[part].__children;
+        });
+      });
+      return root;
+    }
+
+    function renderFileTreeNode(tree){
+      return `<ul>${Object.entries(tree).map(([name, data]) => {
+        const childMarkup = Object.keys(data.__children).length ? renderFileTreeNode(data.__children) : '';
+        const cls = data.__file ? 'tree-file' : 'tree-folder';
+        return `<li><div class="${cls}">${name}</div>${childMarkup}</li>`;
+      }).join('')}</ul>`;
+    }
+
+    function renderFileTree(paths, elementId){
+      const target = document.getElementById(elementId);
+      if (!paths || !paths.length){
+        target.innerHTML = '<div class="status-meta">No files available</div>';
+        return;
+      }
+      const tree = buildFileTree(paths);
+      target.innerHTML = `<div class="tree-root">${renderFileTreeNode(tree)}</div>`;
+    }
+
+    function renderUnifiedPatches(diff){
+      const target = document.getElementById('diffPatch');
+      if (!diff || !diff.patches || !diff.patches.length){
+        target.innerHTML = 'No simulated patch available yet.';
+        renderFileTree([], 'diffFileTree');
+        return;
+      }
+      renderFileTree(diff.file_tree || [], 'diffFileTree');
+      target.innerHTML = diff.patches.map(patch => {
+        const header = `<span class="diff-line diff-header"># ${patch.label} · ${patch.path}</span>`;
+        return `${header}\n${formatDiff(patch.diff)}`;
+      }).join('\n\n');
+    }
+
+    function renderPlatformSync(platformSync){
+      const syncState = platformSync || {
+        neo4j: {status: 'pending'},
+        postgres: {status: 'pending'},
+        milvus: {status: 'pending'},
+      };
+      const labels = [
+        ['Neo4j', syncState.neo4j],
+        ['PostgreSQL', syncState.postgres],
+        ['Milvus', syncState.milvus],
+      ];
+      const allStates = labels.map(([, value]) => value?.status || 'pending').join(' / ');
+      document.getElementById('summaryPlatformSync').textContent = `Platform sync: ${allStates}`;
+      document.getElementById('platformSyncStatus').innerHTML = labels.map(([label, value]) => {
+        const status = value?.status || 'pending';
+        const meta = value?.error ? `${status} · ${value.error}` : JSON.stringify(value || {}).replace(/[{}"]/g, '');
+        return `<div class="status-chip"><div class="status-name">${label}</div><div class="status-meta">${meta || status}</div></div>`;
+      }).join('');
+    }
+
+    function renderPostgresTables(tables){
+      if (!tables || !tables.length){
+        document.getElementById('summaryPgTables').textContent = 'PostgreSQL tables tracked: 0';
+        document.getElementById('postgresTables').innerHTML = '<div class="status-chip"><div class="status-name">Waiting for upload</div><div class="status-meta">No PostgreSQL table stats yet</div></div>';
+        document.getElementById('postgresTables').className = 'status-row';
+        return;
+      }
+      document.getElementById('summaryPgTables').textContent = `PostgreSQL tables tracked: ${tables.length}`;
+      document.getElementById('postgresTables').className = 'status-row';
+      document.getElementById('postgresTables').innerHTML = tables.map(table => `
+        <div class="status-chip">
+          <div class="status-name">${table.name}</div>
+          <div class="status-meta">Rows: ${table.rows} · Status: ${table.status}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderVectorDbDetails(vectorDb){
+      if (!vectorDb){
+        document.getElementById('vectorDbDetails').innerHTML = '<div class="status-chip"><div class="status-name">Waiting for upload</div><div class="status-meta">No vector collection stats yet</div></div>';
+        return;
+      }
+      document.getElementById('vectorDbDetails').innerHTML = `
+        <div class="status-chip">
+          <div class="status-name">Collection</div>
+          <div class="status-meta">${vectorDb.collection_name}</div>
+        </div>
+        <div class="status-chip">
+          <div class="status-name">Sync Status</div>
+          <div class="status-meta">${vectorDb.status} · ${vectorDb.sync_stage}</div>
+        </div>
+        <div class="status-chip">
+          <div class="status-name">Entities</div>
+          <div class="status-meta">${vectorDb.entity_count} vectors · ${vectorDb.partitions} partitions</div>
+        </div>
+        <div class="status-chip">
+          <div class="status-name">Index Profile</div>
+          <div class="status-meta">${vectorDb.index_type} · ${vectorDb.metric_type} · dim ${vectorDb.vector_dimension}</div>
+        </div>
+      `;
+    }
+
+    function resetDashboardAfterClear(message){
+      selected = null;
+      document.getElementById('selected').textContent = '(none)';
+      document.getElementById('approveBtn').disabled = true;
+      document.getElementById('simulateBtn').disabled = true;
+      document.getElementById('affected').textContent = '0';
+      document.getElementById('percent').textContent = '0';
+      document.getElementById('status').textContent = message;
+      setUploadProgress(0, 'Data cleared');
+      setProgressSummary(0, 7, 'Waiting for new repo analysis');
+      updateUploadSummary(0, 0, 0);
+      renderPlatformSync(null);
+      renderVectorDbDetails(null);
+      renderPostgresTables([]);
+      renderUnifiedPatches(null);
+      const repoDescription = document.getElementById('repoDescription');
+      const repoParents = document.getElementById('repoParents');
+      const repoDependents = document.getElementById('repoDependents');
+      const repoFiles = document.getElementById('repoFiles');
+      const repoCycle = document.getElementById('repoCycle');
+      const repoMatches = document.getElementById('repoMatches');
+      if (repoDescription) repoDescription.textContent = 'Select a repo in the graph to view parent/dependent relationships, files, and cycle flags.';
+      if (repoParents) repoParents.textContent = '';
+      if (repoDependents) repoDependents.textContent = '';
+      if (repoFiles) repoFiles.textContent = '';
+      if (repoCycle) repoCycle.textContent = '';
+      if (repoMatches) repoMatches.textContent = '';
+      renderApprovalInsight(null);
+      document.getElementById('neo4jInsightSummary').textContent = 'Waiting for graph sync';
+      document.getElementById('neo4jInsights').innerHTML = '';
+      document.getElementById('validationSummary').textContent = 'Run simulation to capture validation output.';
+      document.getElementById('validationOutput').innerHTML = '';
+      document.querySelector('#rankingTable tbody').innerHTML = '';
+      document.getElementById('aiSuggestion').textContent = '';
+      resetUploadSteps();
+    }
+
+    function renderRepoDetail(repo){
+      const repoDescription = document.getElementById('repoDescription');
+      const repoParents = document.getElementById('repoParents');
+      const repoDependents = document.getElementById('repoDependents');
+      const repoFiles = document.getElementById('repoFiles');
+      const repoCycle = document.getElementById('repoCycle');
+      const repoMatches = document.getElementById('repoMatches');
+      if (!repoDescription || !repoParents || !repoDependents || !repoFiles || !repoCycle || !repoMatches){
+        return;
+      }
+      const detail = graph.repo_details?.[repo] || null;
+      if (!detail){
+        repoDescription.textContent = 'No repo metadata found.';
+        repoParents.textContent = '';
+        repoDependents.textContent = '';
+        repoFiles.innerHTML = '';
+        repoCycle.textContent = '';
+        repoMatches.textContent = '';
+        return;
+      }
+
+      repoDescription.textContent = detail.description;
+      repoParents.innerHTML = `<strong>Parents:</strong> ${detail.parents.length ? detail.parents.join(', ') : 'None'}`;
+      repoDependents.innerHTML = `<strong>Dependents:</strong> ${detail.dependents.length ? detail.dependents.join(', ') : 'None'}`;
+      repoFiles.innerHTML = `<strong>Files:</strong><div id="repoFilesTree"></div>`;
+      renderFileTree(detail.files || [], 'repoFilesTree');
+      repoCycle.innerHTML = detail.cycle ? `<strong>Circular dependency:</strong> ${detail.cycle_paths.map(path => path.join(' → ')).join('; ')}` : '<strong>Circular dependency:</strong> None';
+
+      const matches = graph.edges.filter(edge => edge.from === repo).map(edge => {
+        return `${edge.to}: ${edge.match_pct}% match (${edge.upstream_file} → ${edge.downstream_file})`;
+      });
+      repoMatches.innerHTML = `<strong>Parameter closeness:</strong> ${matches.length ? matches.join('; ') : 'No downstream matches found.'}`;
+    }
+
+    document.getElementById('uploadBtn').addEventListener('click', async ()=>{
+      const repos = document.getElementById('repoInput').value;
+      const repoLines = repos.split('\n').map(r=>r.trim()).filter(Boolean);
+      if (!repoLines.length){
+        alert('Please enter at least one repo path or repo name');
+        return;
+      }
+      resetUploadSteps();
+      setUploadProgress(0, 'Preparing upload');
+      document.getElementById('status').textContent = 'Analyzing repos...';
+      try {
+        const res = await fetch('/api/upload', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({repo_list: repoLines})});
+        console.log('upload response status', res.status);
+        const text = await res.text();
+        let out;
+        try {
+          out = JSON.parse(text);
+        } catch (err) {
+          console.error('Failed to parse upload response', text, err);
+          alert('Upload failed: invalid JSON response');
+          return;
+        }
+        if (!res.ok){
+          console.error('Upload returned error', out);
+          alert(out.error || 'Upload failed');
+          return;
+        }
+        if (out.error){
+          alert(out.error);
+          return;
+        }
+        uploadState.active = false;
+        await updateRanking(out.ranking);
+        await loadGraph();
+        document.getElementById('status').textContent = 'Repo analysis complete';
+      } catch (err) {
+        console.error('Upload request failed', err);
+        uploadState.active = false;
+        document.getElementById('status').textContent = 'Upload request failed';
+        alert('Upload request failed. See console for details.');
+      }
+    });
+
+    document.getElementById('loadSampleBtn').addEventListener('click', async ()=>{
+      await loadSampleRepoList();
+      document.getElementById('status').textContent = 'Complex sample repo list loaded';
+    });
+
+    document.getElementById('clearDataBtn').addEventListener('click', async ()=>{
+      try {
+        const res = await fetch('/api/clear_platform_data', {method:'POST', headers:{'Content-Type':'application/json'}});
+        const out = await res.json();
+        if (!res.ok || out.error){
+          alert(out.error || 'Failed to clear platform data');
+          return;
+        }
+        resetDashboardAfterClear(out.message || 'Platform data cleared');
+        await loadGraph();
+      } catch (err) {
+        console.error('Clear data request failed', err);
+        alert('Clear data request failed. See console for details.');
+      }
+    });
+
+    document.getElementById('approveBtn').addEventListener('click', async ()=>{
+      if (!selected) return;
+      const res = await fetch('/api/approve', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({repo: selected})});
+      const payload = await res.json();
+      if (payload?.insight){
+        renderApprovalInsight(payload.insight);
+      }
+      if (payload?.platform_sync){
+        renderPlatformSync(payload.platform_sync);
+      }
+      await loadGraph();
+    });
+
+    document.getElementById('simulateBtn')?.addEventListener('click', async ()=>{
+      if (!selected) return;
+      document.getElementById('status').textContent = 'Running simulation...';
+      await fetch('/api/simulate', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({repo: selected})});
+    });
+
+    document.getElementById('rearrangeGraphBtn').addEventListener('click', ()=>{
+      rearrangeGraph();
+    });
+
+    function formatDiff(text){
+      if (!text) return '';
+      return text.split('\n').map(line => {
+        if (line.startsWith('---') || line.startsWith('+++')) return `<span class="diff-line diff-header">${line}</span>`;
+        if (line.startsWith('@@')) return `<span class="diff-line diff-hunk">${line}</span>`;
+        if (line.startsWith('+')) return `<span class=\"diff-line added\">${line}</span>`;
+        if (line.startsWith('-')) return `<span class=\"diff-line removed\">${line}</span>`;
+        return `<span class=\"diff-line\">${line}</span>`;
+      }).join('');
+    }
+
+    function renderUploadStep(step){
+      return `<div class=\"step-card\"><div class=\"step-title\">Step ${step.step}</div><div class=\"step-detail\">${step.name}</div><div style=\"margin-top:10px;color:#c9d9e8;\">${step.detail}</div></div>`;
+    }
+
+    function resetUploadSteps(){
+      const container = document.getElementById('uploadSteps');
+      container.innerHTML = '';
+      uploadState = { completedStep: 0, totalSteps: 7, active: true };
+      setProgressSummary(0, 7, 'Waiting for upload');
+      for (let i=1;i<=7;i++){
+        container.innerHTML += renderUploadStep({step:i,name:'Pending',detail:'Waiting for upload'});
+      }
+    }
+
+    async function updateRanking(ranking){
+      const body = document.querySelector('#rankingTable tbody');
+      body.innerHTML = '';
+      ranking.forEach(entry => {
+        const row = document.createElement('tr');
+        row.innerHTML = `<td>${entry.repo}</td><td>${entry.impact_score}</td><td class=\"priority-high\">${entry.priority}</td>`;
+        body.appendChild(row);
+      });
+      const top = ranking[0];
+      document.getElementById('aiSuggestion').innerHTML = `<strong>${top.repo}</strong>: ${top.finding.title} (severity ${top.finding.severity})<br>${top.finding.suggestion}`;
+    }
+
+    function startSSE(){
+      if (evtSource) return;
+      evtSource = new EventSource('/api/stream');
+      evtSource.onopen = () => {
+        console.log('SSE connected');
+        if (!uploadState.active && uploadState.completedStep === 0){
+          document.getElementById('status').textContent = 'Connected to stream';
+        }
+      };
+      evtSource.onerror = (err) => {
+        console.error('SSE error', err);
+        if (uploadState.active){
+          document.getElementById('status').textContent = 'Stream reconnecting during repo analysis';
+        }
+      };
+      evtSource.addEventListener('upload_step', e=>{
+        const d = JSON.parse(e.data);
+        const container = document.getElementById('uploadSteps');
+        const item = container.children[d.step-1];
+        if (item){
+          item.innerHTML = `<div class=\"step-title\">Step ${d.step}</div><div class=\"step-detail\">${d.name}</div><div style=\"margin-top:10px;color:#c9d9e8;\">${d.detail}</div>`;
+        }
+        setProgressSummary(d.step, d.total_steps || uploadState.totalSteps, `${d.name} completed`);
+      });
+      evtSource.addEventListener('upload_progress', e=>{
+        const d = JSON.parse(e.data);
+        setUploadProgress(d.percent, d.message);
+        updateUploadSummary(d.nodes, d.edges, d.vector_count);
+        renderPlatformSync(d.platform_sync);
+        renderVectorDbDetails(d.vector_db);
+        renderPostgresTables(d.pg_tables);
+        setProgressSummary(d.step || uploadState.completedStep, d.total_steps || uploadState.totalSteps, d.message);
+        document.getElementById('status').textContent = d.message;
+      });
+      evtSource.addEventListener('upload_done', e=>{
+        const d = JSON.parse(e.data);
+        uploadState.active = false;
+        document.getElementById('status').textContent = `Upload complete — ${d.total_repos} repos, ${d.total_edges} dependencies`;
+        setUploadProgress(100, 'Repo knowledge build complete');
+        renderPlatformSync(d.platform_sync);
+        renderVectorDbDetails(d.vector_db);
+        renderPostgresTables(d.pg_tables);
+        setProgressSummary(d.step || d.total_steps || 7, d.total_steps || 7, 'All upload steps completed');
+        if (d.ranking){
+          updateRanking(d.ranking);
+        }
+        loadNeo4jInsights(selected);
+        setTimeout(()=>{ document.getElementById('status').textContent = 'Idle' }, 3000);
+      });
+      evtSource.addEventListener('simulate_step', e=>{
+        const d = JSON.parse(e.data);
+        document.getElementById('status').textContent = `Applying ${d.repo} (${d.index}/${d.total})`;
+        if (d.diff){
+          renderUnifiedPatches(d.diff);
+        }
+        if (d.validation){
+          renderValidation(d.validation);
+        }
+        const node = network.body.data.nodes.get(d.repo);
+        if (node){
+          network.body.data.nodes.update({id:d.repo, color:{background:'#10b981', border:'#064e3b'}});
+        }
+      });
+      evtSource.addEventListener('simulate_done', e=>{
+        document.getElementById('status').textContent = 'Simulation complete';
+        setTimeout(()=>{ document.getElementById('status').textContent = 'Idle' }, 2000);
+        loadGraph();
+      });
+      evtSource.addEventListener('approve', e=>{
+        try {
+          const d = JSON.parse(e.data);
+          if (d.insight){
+            renderApprovalInsight(d.insight);
+          }
+          if (d.platform_sync){
+            renderPlatformSync(d.platform_sync);
+          }
+        } catch (err) {
+          console.error('approve event parse failed', err);
+        }
+        loadGraph();
+      });
+      evtSource.addEventListener('platform_cleared', e=>{
+        const d = JSON.parse(e.data);
+        resetDashboardAfterClear(d.message || 'Platform data cleared');
+        updateUploadSummary(d.nodes, d.edges, d.vector_count);
+        renderPlatformSync(d.platform_sync);
+        renderVectorDbDetails(d.vector_db);
+        renderPostgresTables(d.pg_tables || []);
+        loadGraph();
+      });
+    }
+
+    resetUploadSteps();
+    startSSE();
+    loadConfig();
+    loadSampleRepoList();
+    loadGraph();
+    window.addEventListener('resize', autoFitGraph);
+  </script>
+</body>
+</html>
