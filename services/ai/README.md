@@ -1,9 +1,23 @@
 # AI Reasoning Service
 
-This service will orchestrate impact analysis, upgrade recommendations, and remediation workflows.
+Python FastAPI service for Stage 6 async intelligence (embeddings + pattern detection).
 
-## Planned capabilities
-- Blast-radius analysis.
-- Security and dependency impact scoring.
-- Natural language engineering assistance.
-- Automated rollout sequencing.
+## Endpoints
+
+- `GET /health` — service health
+- `POST /embed/chunk` — embed and upsert IaC chunk to Milvus `iac_patterns`
+- `POST /ingest/parse-result` — batch embed stack profiles and resource patterns from parse results
+- `POST /patterns/detect` — async fleet pattern detection (cost waste, etc.)
+- `GET /patterns/similar?repo_id=` — vector similarity lookup
+
+## Run locally
+
+```bash
+cd services/ai
+pip install -r requirements.txt
+MILVUS_URI=http://localhost:19530 uvicorn main:app --port 8100
+```
+
+## Docker
+
+Included in root `docker-compose.yml` as service `ai` on port 8100.

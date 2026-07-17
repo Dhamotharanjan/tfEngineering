@@ -1,0 +1,399 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Versioned Terraform module interface contracts for Release Compare. Replace/extend with artifacts parsed from tagged checkouts.",
+  "modules": [
+    {
+      "module_id": "upstream-core-network-modules",
+      "module_source": "git::ssh://git.example.com/core-modules/aws-network//vpc",
+      "display_name": "Core Network / VPC",
+      "github_full_name": "acme/terraform-modules-vpc",
+      "source_match": ["aws-network", "upstream-core-network-modules", "terraform-modules-vpc", "vpc"],
+      "releases": [
+        {
+          "version": "v2.4.2",
+          "released_at": "2026-01-12T00:00:00Z",
+          "variables": [
+            {
+              "name": "cidr_block",
+              "type": "string",
+              "default": "10.20.0.0/16",
+              "sensitive": false,
+              "description": "VPC CIDR block"
+            },
+            {
+              "name": "az_count",
+              "type": "number",
+              "default": 2,
+              "sensitive": false,
+              "description": "Number of availability zones"
+            },
+            {
+              "name": "enable_nat_gateway",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Create NAT gateways for private subnets"
+            },
+            {
+              "name": "legacy_cidr_compat",
+              "type": "bool",
+              "default": false,
+              "sensitive": false,
+              "description": "Enable legacy CIDR compatibility mode"
+            },
+            {
+              "name": "tags",
+              "type": "map(string)",
+              "default": {},
+              "sensitive": false,
+              "description": "Resource tags"
+            }
+          ],
+          "outputs": [
+            { "name": "vpc_id", "sensitive": false, "description": "VPC ID" },
+            { "name": "private_subnet_ids", "sensitive": false, "description": "Private subnet IDs" },
+            { "name": "public_subnet_ids", "sensitive": false, "description": "Public subnet IDs" }
+          ]
+        },
+        {
+          "version": "v3.0.0",
+          "released_at": "2026-07-17T10:42:00Z",
+          "variables": [
+            {
+              "name": "cidr_block",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "VPC CIDR block (required)"
+            },
+            {
+              "name": "az_count",
+              "type": "number",
+              "default": null,
+              "sensitive": false,
+              "description": "Number of availability zones (required)"
+            },
+            {
+              "name": "enable_nat_gateway",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Create NAT gateways for private subnets"
+            },
+            {
+              "name": "enable_flow_logs",
+              "type": "bool",
+              "default": false,
+              "sensitive": false,
+              "description": "Enable VPC flow logs"
+            },
+            {
+              "name": "flow_log_retention_days",
+              "type": "number",
+              "default": 30,
+              "sensitive": false,
+              "description": "CloudWatch retention for flow logs"
+            },
+            {
+              "name": "tags",
+              "type": "map(string)",
+              "default": {},
+              "sensitive": false,
+              "description": "Resource tags applied to all network resources"
+            }
+          ],
+          "outputs": [
+            { "name": "vpc_id", "sensitive": false, "description": "VPC ID" },
+            { "name": "private_subnet_ids", "sensitive": false, "description": "Private subnet IDs" },
+            { "name": "public_subnet_ids", "sensitive": false, "description": "Public subnet IDs" },
+            { "name": "nat_gateway_ids", "sensitive": false, "description": "NAT gateway IDs" },
+            { "name": "flow_log_id", "sensitive": false, "description": "Flow log ID when enabled" }
+          ]
+        },
+        {
+          "version": "v2026.07.0",
+          "released_at": "2026-07-01T00:00:00Z",
+          "variables": [
+            {
+              "name": "cidr_block",
+              "type": "string",
+              "default": "10.20.0.0/16",
+              "sensitive": false,
+              "description": "VPC CIDR"
+            },
+            {
+              "name": "az_count",
+              "type": "number",
+              "default": 2,
+              "sensitive": false,
+              "description": "AZ count"
+            },
+            {
+              "name": "enable_nat_gateway",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "NAT gateways"
+            },
+            {
+              "name": "legacy_cidr_compat",
+              "type": "bool",
+              "default": false,
+              "sensitive": false,
+              "description": "Legacy CIDR mode"
+            },
+            {
+              "name": "tags",
+              "type": "map(string)",
+              "default": {},
+              "sensitive": false,
+              "description": "Tags"
+            }
+          ],
+          "outputs": [
+            { "name": "vpc_id", "sensitive": false },
+            { "name": "private_subnet_ids", "sensitive": false }
+          ]
+        },
+        {
+          "version": "v2026.07.1",
+          "released_at": "2026-07-15T00:00:00Z",
+          "variables": [
+            {
+              "name": "cidr_block",
+              "type": "string",
+              "default": "10.20.0.0/16",
+              "sensitive": false,
+              "description": "VPC CIDR"
+            },
+            {
+              "name": "az_count",
+              "type": "number",
+              "default": null,
+              "sensitive": false,
+              "description": "AZ count (now required — no default)"
+            },
+            {
+              "name": "enable_nat_gateway",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "NAT gateways"
+            },
+            {
+              "name": "enable_flow_logs",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Enable VPC flow logs (new)"
+            },
+            {
+              "name": "flow_log_retention_days",
+              "type": "number",
+              "default": 90,
+              "sensitive": false,
+              "description": "Flow log retention"
+            },
+            {
+              "name": "tags",
+              "type": "map(string)",
+              "default": { "managed_by": "core-engineering" },
+              "sensitive": false,
+              "description": "Tags (default now includes managed_by)"
+            }
+          ],
+          "outputs": [
+            { "name": "vpc_id", "sensitive": false },
+            { "name": "private_subnet_ids", "sensitive": false },
+            { "name": "flow_log_id", "sensitive": false }
+          ]
+        }
+      ]
+    },
+    {
+      "module_id": "upstream-core-database-modules",
+      "module_source": "git::ssh://git.example.com/core-modules/aws-database//rds",
+      "display_name": "Core Database / RDS",
+      "github_full_name": "acme/terraform-modules-rds",
+      "source_match": ["aws-database", "upstream-core-database-modules", "terraform-modules-rds", "rds"],
+      "releases": [
+        {
+          "version": "v2026.07.0",
+          "released_at": "2026-07-01T00:00:00Z",
+          "variables": [
+            {
+              "name": "identifier",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "DB identifier"
+            },
+            {
+              "name": "instance_class",
+              "type": "string",
+              "default": "db.t3.medium",
+              "sensitive": false,
+              "description": "Instance class"
+            },
+            {
+              "name": "engine_version",
+              "type": "string",
+              "default": "15.4",
+              "sensitive": false,
+              "description": "Postgres engine version"
+            },
+            {
+              "name": "multi_az",
+              "type": "bool",
+              "default": false,
+              "sensitive": false,
+              "description": "Multi-AZ"
+            }
+          ],
+          "outputs": [
+            { "name": "db_instance_id", "sensitive": false },
+            { "name": "endpoint", "sensitive": false }
+          ]
+        },
+        {
+          "version": "v2026.07.1",
+          "released_at": "2026-07-15T00:00:00Z",
+          "variables": [
+            {
+              "name": "identifier",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "DB identifier"
+            },
+            {
+              "name": "instance_class",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "Instance class (required)"
+            },
+            {
+              "name": "engine_version",
+              "type": "string",
+              "default": "16.1",
+              "sensitive": false,
+              "description": "Postgres engine version"
+            },
+            {
+              "name": "multi_az",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Multi-AZ (default true)"
+            },
+            {
+              "name": "performance_insights",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Enable Performance Insights"
+            }
+          ],
+          "outputs": [
+            { "name": "db_instance_id", "sensitive": false },
+            { "name": "endpoint", "sensitive": false },
+            { "name": "performance_insights_arn", "sensitive": false }
+          ]
+        }
+      ]
+    },
+    {
+      "module_id": "upstream-core-storage-modules",
+      "module_source": "git::ssh://git.example.com/core-modules/aws-storage//foundation",
+      "display_name": "Core Storage / Foundation",
+      "github_full_name": "acme/terraform-modules-storage",
+      "source_match": ["aws-storage", "upstream-core-storage-modules", "terraform-modules-storage", "s3", "foundation"],
+      "releases": [
+        {
+          "version": "v1.0.0",
+          "released_at": "2026-03-01T00:00:00Z",
+          "variables": [
+            {
+              "name": "bucket_name",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "S3 bucket name"
+            },
+            {
+              "name": "versioning",
+              "type": "bool",
+              "default": false,
+              "sensitive": false,
+              "description": "Enable versioning"
+            }
+          ],
+          "outputs": [{ "name": "bucket_arn", "sensitive": false }]
+        },
+        {
+          "version": "v1.1.0",
+          "released_at": "2026-06-01T00:00:00Z",
+          "variables": [
+            {
+              "name": "bucket_name",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "S3 bucket name"
+            },
+            {
+              "name": "versioning",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Enable versioning (default true)"
+            },
+            {
+              "name": "force_ssl",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Deny insecure transport"
+            }
+          ],
+          "outputs": [
+            { "name": "bucket_arn", "sensitive": false },
+            { "name": "bucket_id", "sensitive": false }
+          ]
+        },
+        {
+          "version": "v2026.07.0",
+          "released_at": "2026-07-01T00:00:00Z",
+          "variables": [
+            {
+              "name": "bucket_name",
+              "type": "string",
+              "default": null,
+              "sensitive": false,
+              "description": "S3 bucket name"
+            },
+            {
+              "name": "versioning",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Enable versioning"
+            },
+            {
+              "name": "force_ssl",
+              "type": "bool",
+              "default": true,
+              "sensitive": false,
+              "description": "Deny insecure transport"
+            }
+          ],
+          "outputs": [
+            { "name": "bucket_arn", "sensitive": false },
+            { "name": "bucket_id", "sensitive": false }
+          ]
+        }
+      ]
+    }
+  ]
+}

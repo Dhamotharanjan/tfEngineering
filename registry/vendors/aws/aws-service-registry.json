@@ -1,0 +1,90 @@
+{
+  "schema_version": "1.0.0",
+  "vendor": "aws",
+  "services": [
+    {
+      "service_id": "vpc",
+      "display_name": "Amazon VPC",
+      "terraform_resources": ["aws_vpc", "aws_subnet", "aws_security_group", "aws_security_group_rule", "aws_nat_gateway", "aws_internet_gateway"],
+      "finops_category": "Networking",
+      "compliance_flags": ["network_isolation"],
+      "key_attributes": ["cidr_block", "vpc_id", "tags"]
+    },
+    {
+      "service_id": "rds",
+      "display_name": "Amazon RDS",
+      "terraform_resources": ["aws_db_instance", "aws_rds_cluster", "aws_rds_cluster_instance"],
+      "finops_category": "Database",
+      "compliance_flags": ["encryption_required", "pci_scope"],
+      "key_attributes": [
+        "engine", "engine_version", "instance_class", "storage_encrypted", "kms_key_id",
+        "multi_az", "availability_zone", "availability_zones", "replicate_source_db",
+        "backup_retention_period", "identifier", "cluster_identifier", "database_name",
+        "license_model", "allocated_storage", "skip_final_snapshot", "db_subnet_group_name", "tags"
+      ],
+      "eol_policy": { "track_engine_version": true, "extended_support_alert_days": 30 }
+    },
+    {
+      "service_id": "s3",
+      "display_name": "Amazon S3",
+      "terraform_resources": ["aws_s3_bucket", "aws_s3_bucket_public_access_block", "aws_s3_bucket_versioning"],
+      "finops_category": "Storage",
+      "compliance_flags": ["public_access_block"],
+      "key_attributes": ["bucket", "acl", "tags"]
+    },
+    {
+      "service_id": "eks",
+      "display_name": "Amazon EKS",
+      "terraform_resources": ["aws_eks_cluster", "aws_eks_node_group"],
+      "finops_category": "Compute",
+      "compliance_flags": ["k8s_version_tracking"],
+      "key_attributes": ["version", "cluster_name"],
+      "eol_policy": { "track_version": true, "extended_support_cost_usd_per_hour": 0.6 }
+    },
+    {
+      "service_id": "kms",
+      "display_name": "AWS KMS",
+      "terraform_resources": ["aws_kms_key", "aws_kms_alias"],
+      "finops_category": "Security",
+      "compliance_flags": ["encryption_key"],
+      "key_attributes": ["description", "enable_key_rotation"]
+    },
+    {
+      "service_id": "ec2",
+      "display_name": "Amazon EC2",
+      "terraform_resources": ["aws_instance", "aws_ebs_volume", "aws_volume_attachment"],
+      "finops_category": "Compute",
+      "key_attributes": [
+        "instance_type", "ami", "tags", "availability_zone", "subnet_id",
+        "vpc_security_group_ids", "root_block_device"
+      ]
+    },
+    {
+      "service_id": "alb",
+      "display_name": "Application Load Balancer",
+      "terraform_resources": ["aws_lb", "aws_lb_listener", "aws_lb_listener_rule", "aws_lb_target_group"],
+      "finops_category": "Networking",
+      "rollout_signals": ["traffic_distribution", "canary_weight"],
+      "key_attributes": ["load_balancer_type", "internal"]
+    },
+    {
+      "service_id": "iam",
+      "display_name": "AWS IAM",
+      "terraform_resources": ["aws_iam_role", "aws_iam_policy", "aws_iam_role_policy_attachment"],
+      "finops_category": "Security",
+      "compliance_flags": ["least_privilege"],
+      "key_attributes": ["name", "policy_arn"]
+    },
+    {
+      "service_id": "platform_observability",
+      "display_name": "Platform Observability",
+      "terraform_resources": ["aws_cloudwatch_metric_alarm", "aws_sns_topic", "aws_sqs_queue"],
+      "finops_category": "Observability",
+      "observability": {
+        "patch_cycles": true,
+        "security_patches": true,
+        "dr_testing": true
+      }
+    }
+  ]
+}

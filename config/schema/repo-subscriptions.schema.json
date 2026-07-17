@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RepoSubscriptions",
+  "type": "object",
+  "required": ["schema_version", "org_id", "repos"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "org_id": { "type": "string" },
+    "subscription_policy": { "type": "object" },
+    "repos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "github_full_name", "role", "subscribed"],
+        "properties": {
+          "id": { "type": "string" },
+          "github_full_name": { "type": "string" },
+          "role": {
+            "type": "string",
+            "enum": ["module_source", "downstream_consumer", "platform_catalog", "observability_config"]
+          },
+          "subscribed": { "type": "boolean" },
+          "entitlement_tier": { "type": "string" },
+          "scan_profile": { "type": "string" },
+          "local_path": { "type": "string" },
+          "triggers_enabled": { "type": "object" },
+          "module_sources_watched": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

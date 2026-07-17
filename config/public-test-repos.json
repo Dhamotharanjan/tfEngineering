@@ -1,0 +1,168 @@
+{
+  "schema_version": "1.0.0",
+  "description": "Curated public GitHub repositories for InfraGraph parser regression and blast-radius testing. Clone into mvp_demo/public_repos/{id}/ before enabling subscriptions.",
+  "clone_root": "mvp_demo/public_repos",
+  "repos": [
+    {
+      "id": "public-gruntwork-live",
+      "github_full_name": "gruntwork-io/terragrunt-infrastructure-live-example",
+      "role": "downstream_consumer",
+      "description": "Canonical Terragrunt live infrastructure layout spanning qa/stage/prod and multiple AWS accounts.",
+      "why_good_for_testing": "Exercises include blocks, find_in_parent_folders, dependency/mock_outputs, read_terragrunt_config, remote module source pins, and multi-environment folder hierarchies without synthetic fixtures.",
+      "clone_url": "https://github.com/gruntwork-io/terragrunt-infrastructure-live-example.git",
+      "default_branch": "main",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-gruntwork-live",
+      "parser_features": [
+        "terragrunt.include",
+        "terragrunt.dependency",
+        "terragrunt.mock_outputs",
+        "terragrunt.dependencies",
+        "terragrunt.inputs",
+        "terragrunt.locals",
+        "terraform.module.source_with_ref"
+      ],
+      "upstream_refs": ["public-gruntwork-modules"],
+      "estimated_size": "small"
+    },
+    {
+      "id": "public-gruntwork-modules",
+      "github_full_name": "gruntwork-io/terragrunt-infrastructure-modules-example",
+      "role": "module_source",
+      "description": "Companion Terraform modules (ASG, MySQL) consumed by the Gruntwork live example.",
+      "why_good_for_testing": "Demonstrates upstream module_source repos referenced by downstream terragrunt.hcl files via git:: URLs and version refs — the core blast-radius edge pattern InfraGraph must resolve.",
+      "clone_url": "https://github.com/gruntwork-io/terragrunt-infrastructure-modules-example.git",
+      "default_branch": "master",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-gruntwork-modules",
+      "parser_features": [
+        "terraform.resource_blocks",
+        "terraform.variable_blocks",
+        "terraform.output_blocks",
+        "terraform.provider_blocks",
+        "multi_file_layout"
+      ],
+      "downstream_consumers": ["public-gruntwork-live"],
+      "estimated_size": "small"
+    },
+    {
+      "id": "public-tfm-vpc",
+      "github_full_name": "terraform-aws-modules/terraform-aws-vpc",
+      "role": "module_source",
+      "description": "Industry-standard AWS VPC Terraform module with subnets, NAT, route tables, and flow logs.",
+      "why_good_for_testing": "Large multi-file module (main.tf, variables.tf, outputs.tf, versions.tf) with data sources, nested resource graphs, and count/for_each patterns commonly referenced by live infra repos.",
+      "clone_url": "https://github.com/terraform-aws-modules/terraform-aws-vpc.git",
+      "default_branch": "master",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-tfm-vpc",
+      "parser_features": [
+        "terraform.module_blocks",
+        "terraform.data_blocks",
+        "terraform.variable_blocks",
+        "terraform.output_blocks",
+        "terraform.resource_blocks.nested",
+        "multi_file_layout"
+      ],
+      "estimated_size": "medium"
+    },
+    {
+      "id": "public-tfm-security-group",
+      "github_full_name": "terraform-aws-modules/terraform-aws-security-group",
+      "role": "module_source",
+      "description": "AWS security group module with dynamic ingress/egress rule blocks and rule submodule.",
+      "why_good_for_testing": "Best-in-class coverage of nested HCL blocks (dynamic ingress/egress), computed rules, and submodule references — directly maps to security_scan_fields.sg_open_to_world parser tests.",
+      "clone_url": "https://github.com/terraform-aws-modules/terraform-aws-security-group.git",
+      "default_branch": "master",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-tfm-security-group",
+      "parser_features": [
+        "terraform.resource_blocks.dynamic_ingress_egress",
+        "terraform.module_blocks.submodule",
+        "terraform.variable_blocks",
+        "terraform.output_blocks",
+        "multi_file_layout"
+      ],
+      "estimated_size": "medium"
+    },
+    {
+      "id": "public-tfm-eks",
+      "github_full_name": "terraform-aws-modules/terraform-aws-eks",
+      "role": "module_source",
+      "description": "Complex EKS cluster module with nested submodules (node groups, IRSA, addons) and cross-resource dependencies.",
+      "why_good_for_testing": "Stress-tests deep module trees, provider aliases, depends_on chains, and submodule version pins — simulates enterprise module upgrade blast radius.",
+      "clone_url": "https://github.com/terraform-aws-modules/terraform-aws-eks.git",
+      "default_branch": "master",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-tfm-eks",
+      "parser_features": [
+        "terraform.module_blocks.nested_submodules",
+        "terraform.provider_blocks.alias",
+        "terraform.resource_blocks.depends_on",
+        "terraform.data_blocks",
+        "eol_tracking.eks"
+      ],
+      "estimated_size": "large"
+    },
+    {
+      "id": "public-cloudposse-components",
+      "github_full_name": "cloudposse/terraform-aws-components",
+      "role": "module_source",
+      "description": "Cloud Posse catalog of composable AWS Terraform/Terragrunt components (VPC, EKS, RDS, etc.).",
+      "why_good_for_testing": "Real-world component library with terragrunt.hcl per stack, remote-state patterns, and layered account/region/env folder structures used by platform teams.",
+      "clone_url": "https://github.com/cloudposse/terraform-aws-components.git",
+      "default_branch": "main",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-cloudposse-components",
+      "parser_features": [
+        "terragrunt.include",
+        "terragrunt.dependency",
+        "terragrunt.generate",
+        "terraform.module_blocks",
+        "multi_file_layout",
+        "cross_component_dependencies"
+      ],
+      "estimated_size": "xlarge"
+    },
+    {
+      "id": "public-binbash-live",
+      "github_full_name": "binbashar/le-tf-infra-aws",
+      "role": "downstream_consumer",
+      "description": "Binbash Leverage production-style layered AWS infrastructure using Terragrunt across accounts and regions.",
+      "why_good_for_testing": "End-to-end live infra repo with terragrunt dependency chains, mock_outputs, remote module sources (terraform-aws-modules), and multi-account layouts — closest to customer deployments.",
+      "clone_url": "https://github.com/binbashar/le-tf-infra-aws.git",
+      "default_branch": "master",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-binbash-live",
+      "parser_features": [
+        "terragrunt.dependency",
+        "terragrunt.mock_outputs",
+        "terragrunt.include",
+        "terragrunt.dependencies",
+        "terraform.module.source_registry",
+        "multi_file_layout"
+      ],
+      "module_sources_watched": ["public-tfm-vpc", "public-tfm-eks"],
+      "estimated_size": "large"
+    },
+    {
+      "id": "public-gcp-fabric",
+      "github_full_name": "GoogleCloudPlatform/cloud-foundation-fabric",
+      "role": "module_source",
+      "description": "Google Cloud Foundation Fabric — modular Terraform for GCP networking, IAM, GKE, and data platforms.",
+      "why_good_for_testing": "Validates parser against non-AWS providers and multi-file module layouts (modules/, fast/, blueprints/) — catches provider-agnostic HCL parsing regressions.",
+      "clone_url": "https://github.com/GoogleCloudPlatform/cloud-foundation-fabric.git",
+      "default_branch": "master",
+      "scan_profile": "enterprise-aws-default",
+      "local_path_after_clone": "mvp_demo/public_repos/public-gcp-fabric",
+      "parser_features": [
+        "terraform.module_blocks",
+        "terraform.variable_blocks",
+        "terraform.output_blocks",
+        "terraform.provider_blocks.gcp",
+        "multi_file_layout",
+        "cross_module_references"
+      ],
+      "estimated_size": "xlarge"
+    }
+  ]
+}

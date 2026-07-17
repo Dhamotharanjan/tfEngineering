@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "profile_id": "enterprise-aws-default",
+  "triggers": {
+    "release_tag": {
+      "enabled": true,
+      "tag_patterns": ["v*.*.*", "release-*"],
+      "mandatory_impact_analysis": true
+    },
+    "pull_request": { "enabled": true, "paths_filter": ["**/*.tf", "**/*.hcl"] },
+    "push_default_branch": { "enabled": true, "incremental_only": true },
+    "schedule": {
+      "full_reconcile_cron": "0 2 * * *",
+      "eol_check_cron": "0 6 * * *",
+      "finops_sync_cron": "0 4 * * *"
+    }
+  },
+  "terraform_scan_fields": {
+    "module_blocks": {
+      "enabled": true,
+      "extract": ["source", "version", "providers", "count", "for_each"]
+    },
+    "resource_blocks": {
+      "enabled": true,
+      "extract": ["type", "name", "provider", "depends_on", "lifecycle"],
+      "attribute_allowlist": "from_registry",
+      "attribute_denylist": ["user_data", "password", "secret"]
+    },
+    "data_blocks": { "enabled": true, "extract": ["type", "name"] },
+    "variable_blocks": { "enabled": true, "extract": ["type", "default", "sensitive"] },
+    "output_blocks": { "enabled": true, "extract": ["value", "sensitive"] },
+    "provider_blocks": { "enabled": true, "extract": ["alias", "region"] },
+    "backend_blocks": { "enabled": true, "extract": ["bucket", "key", "region"] },
+    "terraform_remote_state": { "enabled": true, "extract": ["backend", "config"] }
+  },
+  "terragrunt_scan_fields": {
+    "include": { "enabled": true, "extract": ["path", "expose"] },
+    "dependency": { "enabled": true, "extract": ["config_path", "mock_outputs"] },
+    "dependencies": { "enabled": true, "extract": ["paths"] },
+    "inputs": { "enabled": true, "extract": ["*"], "redact_keys": ["password", "secret"] },
+    "locals": { "enabled": true },
+    "source": { "enabled": true },
+    "generate": { "enabled": true }
+  },
+  "metadata_scan_fields": {
+    "codeowners": { "enabled": true, "path": ".github/CODEOWNERS" },
+    "catalog_info": { "enabled": true, "path": "catalog-info.yaml" },
+    "terraform_lock": { "enabled": true, "path": ".terraform.lock.hcl" },
+    "tags_from_hcl": {
+      "enabled": true,
+      "keys": ["Environment", "Compliance", "Owner", "CostCenter", "Application", "DataClassification"]
+    }
+  },
+  "rollout_strategy_signals": {
+    "canary": {
+      "resource_patterns": ["aws_lb_listener_rule", "aws_lb_target_group"],
+      "variable_patterns": ["traffic_distribution", "canary_weight", "green_weight"]
+    },
+    "blue_green": {
+      "variable_patterns": ["active_environment", "enable_blue", "enable_green"]
+    },
+    "rolling": {
+      "resource_patterns": ["aws_eks_node_group", "aws_autoscaling_group"],
+      "attribute_patterns": ["max_unavailable", "deployment_maximum_percent"]
+    },
+    "maintenance_window": {
+      "resource_patterns": ["aws_db_instance", "aws_rds_cluster"],
+      "attribute_patterns": ["apply_immediately", "maintenance_window"]
+    }
+  },
+  "eol_tracking_fields": {
+    "eks": { "resource": "aws_eks_cluster", "attributes": ["version"] },
+    "rds": { "resource": "aws_db_instance", "attributes": ["engine", "engine_version"] },
+    "lambda": { "resource": "aws_lambda_function", "attributes": ["runtime"] }
+  },
+  "security_scan_fields": {
+    "s3_public_access": { "resource": "aws_s3_bucket_public_access_block", "enabled": true },
+    "sg_open_to_world": { "resource": "aws_security_group_rule", "cidr_deny": ["0.0.0.0/0"] },
+    "unencrypted_rds": { "resource": "aws_db_instance", "attribute": "storage_encrypted", "expected": true }
+  },
+  "finops_scan_fields": {
+    "new_resource_cost_estimate": { "enabled": true },
+    "extended_support_detection": { "enabled": true }
+  },
+  "redaction": {
+    "never_store_patterns": ["*password*", "*secret*", "*token*", "*private_key*"],
+    "hash_instead_of_store": ["backend.config.access_key"]
+  }
+}

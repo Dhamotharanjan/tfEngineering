@@ -1,0 +1,157 @@
+{
+  "schema_version": "1.0.0",
+  "org_id": "acme-bank",
+  "subscription_policy": {
+    "default_on_new_repos": false,
+    "require_admin_approval": true
+  },
+  "repos": [
+    {
+      "id": "upstream-core-network-modules",
+      "github_full_name": "acme/terraform-modules-vpc",
+      "role": "module_source",
+      "subscribed": true,
+      "subscribed_at": "2026-01-15T00:00:00Z",
+      "entitlement_tier": "enterprise",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/sample_repos/upstream-core-network-modules",
+      "triggers_enabled": {
+        "release_tag_mandatory_analysis": true,
+        "pr_impact_comment": true,
+        "eol_alerts": true,
+        "security_advisories": true,
+        "finops_recommendations": true
+      },
+      "aws_accounts_linked": ["111122223333"],
+      "compliance_scope": ["pci_dss"],
+      "contacts": { "primary_team": "platform-core", "oncall": "pagerduty:platform-oncall" }
+    },
+    {
+      "id": "team-database-platform-infra",
+      "github_full_name": "acme/infra-payments-prod",
+      "role": "downstream_consumer",
+      "subscribed": true,
+      "entitlement_tier": "professional",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/sample_repos/team-database-platform-infra",
+      "appsvn": "APPSVN-1001",
+      "application_label": "Payments Gateway",
+      "module_sources_watched": ["acme/terraform-modules-vpc", "upstream-core-network-modules"],
+      "triggers_enabled": {
+        "release_tag_mandatory_analysis": true,
+        "eol_alerts": true,
+        "finops_recommendations": true
+      },
+      "eol_tracking": {
+        "enabled": true,
+        "extended_support_billing_alert": true,
+        "estimated_monthly_extended_cost_usd": 438
+      }
+    },
+    {
+      "id": "repo-a",
+      "github_full_name": "acme/infra-checkout-stg",
+      "role": "downstream_consumer",
+      "subscribed": true,
+      "entitlement_tier": "standard",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/sample_repos/repo-a",
+      "appsvn": "APPSVN-1001",
+      "application_label": "Payments Gateway",
+      "module_sources_watched": ["upstream-core-network-modules"],
+      "triggers_enabled": { "pr_impact_comment": true },
+      "notes": "Shares APPSVN-1001 with payments-prod (multi-repo application)"
+    },
+    {
+      "id": "upstream-core-database-modules",
+      "github_full_name": "acme/terraform-modules-rds",
+      "role": "module_source",
+      "subscribed": true,
+      "entitlement_tier": "enterprise",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/sample_repos/upstream-core-database-modules",
+      "triggers_enabled": { "release_tag_mandatory_analysis": true }
+    },
+    {
+      "id": "upstream-core-storage-modules",
+      "github_full_name": "acme/terraform-modules-storage",
+      "role": "module_source",
+      "subscribed": true,
+      "entitlement_tier": "enterprise",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/sample_repos/upstream-core-storage-modules",
+      "triggers_enabled": { "release_tag_mandatory_analysis": true, "eol_alerts": true },
+      "notes": "S3, EBS, EFS, KMS shared storage module source"
+    },
+    {
+      "id": "team-storage-platform-infra",
+      "github_full_name": "acme/infra-storage-prod",
+      "role": "downstream_consumer",
+      "subscribed": true,
+      "entitlement_tier": "professional",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/sample_repos/team-storage-platform-infra",
+      "appsvn": "APPSVN-1002",
+      "application_label": "Object Storage Platform",
+      "module_sources_watched": ["upstream-core-storage-modules", "upstream-core-network-modules"],
+      "triggers_enabled": { "eol_alerts": true }
+    },
+    {
+      "id": "public-gruntwork-live",
+      "github_full_name": "gruntwork-io/terragrunt-infrastructure-live-example",
+      "role": "downstream_consumer",
+      "subscribed": false,
+      "entitlement_tier": "standard",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/public_repos/public-gruntwork-live",
+      "module_sources_watched": ["public-gruntwork-modules"],
+      "triggers_enabled": { "pr_impact_comment": true },
+      "notes": "Public parser test repo — clone via scripts/clone-public-test-repos.ps1 then set subscribed=true"
+    },
+    {
+      "id": "public-gruntwork-modules",
+      "github_full_name": "gruntwork-io/terragrunt-infrastructure-modules-example",
+      "role": "module_source",
+      "subscribed": false,
+      "entitlement_tier": "standard",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/public_repos/public-gruntwork-modules",
+      "triggers_enabled": { "release_tag_mandatory_analysis": true },
+      "notes": "Upstream modules for public-gruntwork-live blast-radius testing"
+    },
+    {
+      "id": "public-tfm-vpc",
+      "github_full_name": "terraform-aws-modules/terraform-aws-vpc",
+      "role": "module_source",
+      "subscribed": false,
+      "entitlement_tier": "standard",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/public_repos/public-tfm-vpc",
+      "triggers_enabled": { "release_tag_mandatory_analysis": true },
+      "notes": "Registry VPC module — tests multi-file layout and data sources"
+    },
+    {
+      "id": "public-tfm-security-group",
+      "github_full_name": "terraform-aws-modules/terraform-aws-security-group",
+      "role": "module_source",
+      "subscribed": false,
+      "entitlement_tier": "standard",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/public_repos/public-tfm-security-group",
+      "triggers_enabled": { "release_tag_mandatory_analysis": true, "security_advisories": true },
+      "notes": "Nested ingress/egress dynamic blocks — security scan field coverage"
+    },
+    {
+      "id": "public-binbash-live",
+      "github_full_name": "binbashar/le-tf-infra-aws",
+      "role": "downstream_consumer",
+      "subscribed": false,
+      "entitlement_tier": "standard",
+      "scan_profile": "enterprise-aws-default",
+      "local_path": "mvp_demo/public_repos/public-binbash-live",
+      "module_sources_watched": ["public-tfm-vpc", "terraform-aws-modules/terraform-aws-vpc"],
+      "triggers_enabled": { "pr_impact_comment": true, "eol_alerts": true },
+      "notes": "Production-style terragrunt live infra for end-to-end parser validation"
+    }
+  ]
+}

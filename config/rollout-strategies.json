@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0.0",
+  "strategies": [
+    {
+      "id": "canary",
+      "priority": 1,
+      "conditions": ["alb_traffic_distribution", "dual_target_groups"]
+    },
+    {
+      "id": "blue_green",
+      "priority": 2,
+      "conditions": ["active_environment_var"]
+    },
+    {
+      "id": "rolling",
+      "priority": 3,
+      "conditions": ["eks_node_group", "autoscaling_group"]
+    },
+    {
+      "id": "maintenance_window",
+      "priority": 4,
+      "conditions": ["rds_apply_immediately_false"]
+    },
+    {
+      "id": "direct_apply",
+      "priority": 10,
+      "conditions": ["dev_or_staging_env"]
+    },
+    {
+      "id": "pin_and_migrate",
+      "priority": 0,
+      "conditions": ["breaking_output_change"]
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "ScanProfile",
+  "type": "object",
+  "required": ["schema_version", "profile_id", "triggers", "terraform_scan_fields"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "profile_id": { "type": "string" },
+    "triggers": { "type": "object" },
+    "terraform_scan_fields": { "type": "object" },
+    "terragrunt_scan_fields": { "type": "object" },
+    "metadata_scan_fields": { "type": "object" },
+    "rollout_strategy_signals": { "type": "object" },
+    "eol_tracking_fields": { "type": "object" },
+    "security_scan_fields": { "type": "object" },
+    "finops_scan_fields": { "type": "object" },
+    "redaction": { "type": "object" }
+  }
+}

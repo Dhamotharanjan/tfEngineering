@@ -1,0 +1,9 @@
+services:
+  prototype-web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: infragraph-prototype
+    ports:
+      - "4000:3000"
+    restart: unless-stopped
