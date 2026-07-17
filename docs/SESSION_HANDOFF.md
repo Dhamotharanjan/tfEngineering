@@ -46,8 +46,16 @@ Last check-in: 2026-07-17. Stack: Nest API + Vite/React web + Go worker + FastAP
 
 API typically via compose (Nest); AI service FastAPI; worker Go.
 
+## Tomorrow build (priority)
+
+- **AI AWS Chat Bot module** — selling sweet spot / differentiator. New product surface (not only a Raise PR status panel): natural-language Q&A about live instances → AWS API/SDK tools → grounded live answers (engine, MultiAZ, class, status, snapshots, AMI, tags, APPSVN, etc.).
+- Plan todo ids: **`ai-aws-chatbot`** (primary), **`aws-live-instance-status`** (shared Describe* backend + later Release Compare / fleet).
+- Plan file: `c:\Users\Admin\.cursor\plans\engineering_intelligence_platform_9ae97e1f.plan.md` — frontmatter todos + **Next steps** under Feature Roadmap.
+- Scope reminder: chat UI workbench + API + AI tools calling AWS; account connect (creds/assume-role); cite API used; degrade if not connected. Do not invent live facts.
+
 ## NOT done (next session)
 
+- **Tomorrow:** AI AWS Chat Bot module (`ai-aws-chatbot`) + live AWS Describe* plumbing (`aws-live-instance-status`).
 - Real GitHub PR creation via Octokit (token path is stubbed).
 - Multi-version release contracts beyond seed/demo data.
 - Harden Neo4j defaults (local `neo4j123` in compose/code — use env in real deploys).
@@ -59,7 +67,8 @@ API typically via compose (Nest); AI service FastAPI; worker Go.
 1. `docker compose up` (see `docker-compose.yml`; prototype variant `docker-compose.prototype.yml`).
 2. Rescan sample repos / Admin clear+scan if graph empty.
 3. Verify Layer 1 architecture for a pattern, then Raise PR flow on Release Compare.
-4. Read this file + `docs/PARSER_ACCEPTANCE_TEST.md` if touching the parser.
+4. Start **AI AWS Chat Bot** module per plan todos `ai-aws-chatbot` / `aws-live-instance-status`.
+5. Read this file + `docs/PARSER_ACCEPTANCE_TEST.md` if touching the parser.
 
 ## Do not commit locally
 
