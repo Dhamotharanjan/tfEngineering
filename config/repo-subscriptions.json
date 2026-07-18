@@ -20,7 +20,8 @@
         "pr_impact_comment": true,
         "eol_alerts": true,
         "security_advisories": true,
-        "finops_recommendations": true
+        "finops_recommendations": true,
+        "reconcile_enabled": true
       },
       "aws_accounts_linked": ["111122223333"],
       "compliance_scope": ["pci_dss"],

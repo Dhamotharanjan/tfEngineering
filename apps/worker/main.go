@@ -56,6 +56,10 @@ func main() {
 		log.Fatalf("redis: %v", err)
 	}
 
+	runner.Enqueue = func(job *models.Job) error {
+		return rq.Enqueue(ctx, *job)
+	}
+
 	if scanOnStart {
 		repos, _ := runner.Loader.LoadSubscriptions()
 		for _, r := range repos {
@@ -93,6 +97,7 @@ func main() {
 			continue
 		}
 		jobID, _ := pg.CreateScanJob(ctx, job.Type, job.Priority, job.RepoID, job.Payload)
+		job.ID = jobID
 		if err := runner.ProcessJob(ctx, job); err != nil {
 			log.Printf("job failed: %v", err)
 			_ = pg.CompleteScanJob(ctx, jobID, "failed", err.Error())

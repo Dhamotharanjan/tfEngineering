@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>InfraGraph WhatsApp Flyer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@500;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0e14;
+      font-family: 'IBM Plex Sans', system-ui, sans-serif;
+      color: #e2e8f0;
+    }
+    .page {
+      width: 1080px;
+      min-height: 1920px;
+      margin: 0 auto 32px;
+      padding: 48px 44px 56px;
+      background: #0b1220;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+    }
+    .page::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 40% at 50% -10%, rgba(6, 182, 212, 0.18), transparent 55%),
+        linear-gradient(180deg, #0b1220 0%, #0f172a 100%);
+      pointer-events: none;
+    }
+    .inner { position: relative; z-index: 1; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .brand-mark {
+      width: 52px; height: 52px;
+      border-radius: 12px;
+      background: rgba(6, 182, 212, 0.2);
+      border: 1px solid rgba(6, 182, 212, 0.45);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: #22d3ee; font-weight: 700;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .brand h1 {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 28px; font-weight: 700; color: #fff; letter-spacing: -0.02em;
+    }
+    .brand p { font-size: 14px; color: #64748b; margin-top: 2px; }
+    .eyebrow {
+      font-size: 13px; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #22d3ee; margin-bottom: 12px;
+    }
+    .title {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 42px; font-weight: 700; line-height: 1.15;
+      color: #fff; letter-spacing: -0.03em; margin-bottom: 16px;
+    }
+    .lead { font-size: 20px; line-height: 1.45; color: #94a3b8; margin-bottom: 28px; }
+    .pillars {
+      display: grid; gap: 12px; margin-bottom: 28px;
+    }
+    .pillar-chip {
+      display: flex; gap: 14px; align-items: flex-start;
+      padding: 16px 18px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .pillar-num {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: rgba(6, 182, 212, 0.2); color: #22d3ee;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-family: 'DM Sans', sans-serif; flex-shrink: 0;
+    }
+    .pillar-chip strong { display: block; color: #f1f5f9; font-size: 16px; margin-bottom: 4px; }
+    .pillar-chip span { font-size: 14px; color: #94a3b8; line-height: 1.35; }
+    .shot {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.12);
+      margin: 18px 0 12px;
+      background: #020617;
+    }
+    .shot img {
+      display: block; width: 100%; height: auto;
+    }
+    .shot-caption {
+      font-size: 13px; color: #64748b; margin-bottom: 20px;
+    }
+    .bullets { list-style: none; margin: 16px 0 24px; }
+    .bullets li {
+      position: relative; padding-left: 22px;
+      font-size: 17px; line-height: 1.45; color: #cbd5e1;
+      margin-bottom: 10px;
+    }
+    .bullets li::before {
+      content: '';
+      position: absolute; left: 0; top: 9px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #22d3ee;
+    }
+    .footer {
+      margin-top: 28px; padding-top: 18px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      font-size: 13px; color: #64748b;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 12px; font-weight: 600; letter-spacing: 0.06em;
+      text-transform: uppercase; color: #22d3ee;
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 4px 10px; border-radius: 6px; margin-bottom: 10px;
+    }
+    .two-shot { display: grid; gap: 14px; }
+    .box {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px; padding: 18px 20px; margin: 14px 0;
+    }
+    .box h3 {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 18px; color: #fff; margin-bottom: 10px;
+    }
+    .box p, .box li { font-size: 15px; color: #94a3b8; line-height: 1.45; }
+    .box ul { margin-left: 18px; margin-top: 8px; }
+    .box li { margin-bottom: 6px; }
+    .page-num {
+      position: absolute; bottom: 28px; right: 44px;
+      font-size: 13px; color: #475569; z-index: 2;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- PAGE 1: Cover -->
+  <section class="page" id="page-1">
+    <div class="inner">
+      <div class="brand">
+        <div class="brand-mark">IG</div>
+        <div>
+          <h1>InfraGraph</h1>
+          <p>Change Intelligence · Stakeholder flyer</p>
+        </div>
+      </div>
+      <div class="eyebrow">WhatsApp share pack</div>
+      <h2 class="title">Turn existing IaaC into org knowledge—so change is fast, governed, and safe.</h2>
+      <p class="lead">Four core ideas. Real product screens. How AI + Milvus work today—and where we take them next.</p>
+      <div class="pillars">
+        <div class="pillar-chip"><div class="pillar-num">1</div><div><strong>Existing code → knowledge → quick turnaround</strong><span>Patterns, Infra Graph, Dependency Tree</span></div></div>
+        <div class="pillar-chip"><div class="pillar-num">2</div><div><strong>Org IaaC: Security · FinOps · architect forums</strong><span>Stamp, FinOps, CAB, Audit</span></div></div>
+        <div class="pillar-chip"><div class="pillar-num">3</div><div><strong>Upstream change → downstream ripple</strong><span>Blast Radius, Release Tag, AI Release Compare</span></div></div>
+        <div class="pillar-chip"><div class="pillar-num">4</div><div><strong>Subscription model — teams opt in</strong><span>Repo Subscriptions + concrete benefits</span></div></div>
+      </div>
+      <div class="shot"><img src="../screenshots/pattern-layer1.png" alt="Infra Graph Patterns" /></div>
+      <p class="shot-caption">Live screen · Infra Graph · Patterns Layer 1 (full module set on following pages)</p>
+      <p class="footer">Swipe next → each pillar with live screens · AI / Milvus story at the end</p>
+    </div>
+    <div class="page-num">1 / 6</div>
+  </section>
+
+  <!-- PAGE 2: Pillar 1 -->
+  <section class="page" id="page-2">
+    <div class="inner">
+      <div class="brand">
+        <div class="brand-mark">IG</div>
+        <div><h1>InfraGraph</h1><p>Pillar 1 of 4</p></div>
+      </div>
+      <span class="tag">Core idea 1</span>
+      <h2 class="title">Existing infrastructure code → org knowledge → quick turnaround</h2>
+      <p class="lead">We don’t ask teams to rewrite IaaC. We ingest what already runs, classify patterns, and make the estate navigable—so upgrades start from knowledge, not archaeology.</p>
+      <ul class="bullets">
+        <li><strong>Layer 1 Patterns</strong> — catalog observed architectures with pros/cons for architect & FinOps.</li>
+        <li><strong>Layer 2</strong> — application-scoped component dependency graphs.</li>
+        <li><strong>Dependency Tree</strong> — Layer-1 technical lineage across subscribed repos.</li>
+        <li><strong>Infra Graph</strong> — stamp-ready architecture canvas from live graph data.</li>
+      </ul>
+      <div class="two-shot">
+        <div class="shot"><img src="../screenshots/pattern-layer1.png" alt="Pattern Layer 1" /></div>
+        <p class="shot-caption">Infra Graph · Patterns (Layer 1)</p>
+        <div class="shot"><img src="../screenshots/layer2-component.png" alt="Layer 2" /></div>
+        <p class="shot-caption">By Application · Layer 2 component dependency</p>
+        <div class="shot"><img src="../screenshots/dependency-tree.png" alt="Dependency Tree" /></div>
+        <p class="shot-caption">Dependency Tree</p>
+      </div>
+    </div>
+    <div class="page-num">2 / 6</div>
+  </section>
+
+  <!-- PAGE 3: Pillar 2 -->
+  <section class="page" id="page-3">
+    <div class="inner">
+      <div class="brand">
+        <div class="brand-mark">IG</div>
+        <div><h1>InfraGraph</h1><p>Pillar 2 of 4</p></div>
+      </div>
+      <span class="tag">Core idea 2</span>
+      <h2 class="title">Org-wide IaaC for Security, FinOps &amp; architect forums</h2>
+      <p class="lead">One operating picture for the estate—ready for security review, cost stewardship, and internal or external architecture / auditor forums.</p>
+      <ul class="bullets">
+        <li>Pattern stamps (e.g. SOC2) + Architect / FinOps / Risk panels on Layer 1.</li>
+        <li>FinOps: module → account → service spend, extended-support &amp; waste signals.</li>
+        <li>CAB reports &amp; audit trail for change advisory boards and auditors.</li>
+        <li>EOL &amp; observability keep debt tax and patch posture visible.</li>
+      </ul>
+      <div class="shot"><img src="../screenshots/finops.png" alt="FinOps" /></div>
+      <p class="shot-caption">FinOps &amp; Cost Attribution</p>
+      <div class="shot"><img src="../screenshots/infragraph.png" alt="Infra Graph stamped patterns" /></div>
+      <p class="shot-caption">Infra Graph — stamped patterns for architect / auditor forums</p>
+    </div>
+    <div class="page-num">3 / 6</div>
+  </section>
+
+  <!-- PAGE 4: Pillar 3 -->
+  <section class="page" id="page-4">
+    <div class="inner">
+      <div class="brand">
+        <div class="brand-mark">IG</div>
+        <div><h1>InfraGraph</h1><p>Pillar 3 of 4</p></div>
+      </div>
+      <span class="tag">Core idea 3</span>
+      <h2 class="title">Accept upstream change—ripple safely downstream</h2>
+      <p class="lead">When a shared module or release tag moves, see who is hit—and sequence the path from platform change to consuming apps.</p>
+      <ul class="bullets">
+        <li><strong>Blast Radius</strong> — upstream ↔ downstream repos, stacks, resources, security findings.</li>
+        <li><strong>Release Tag Impact</strong> — mandatory analysis when tags merge (who, stacks, cost).</li>
+        <li><strong>Release Compare + AI</strong> — interface diff, upgrade paths, engineer chat, Raise PR workbench.</li>
+        <li>Change / Rollout plans turn impact into an executable ripple.</li>
+      </ul>
+      <div class="shot"><img src="../screenshots/blast-radius.png" alt="Blast Radius" /></div>
+      <p class="shot-caption">Blast Radius · Upstream / Downstream</p>
+      <div class="shot"><img src="../screenshots/release-tag-impact.png" alt="Release Tag Impact" /></div>
+      <p class="shot-caption">Release Tag Impact</p>
+      <div class="shot"><img src="../screenshots/release-compare-ai.png" alt="Release Compare AI" /></div>
+      <p class="shot-caption">Release Compare workbench — AI recommendations &amp; engineer chat</p>
+    </div>
+    <div class="page-num">4 / 6</div>
+  </section>
+
+  <!-- PAGE 5: Pillar 4 -->
+  <section class="page" id="page-5">
+    <div class="inner">
+      <div class="brand">
+        <div class="brand-mark">IG</div>
+        <div><h1>InfraGraph</h1><p>Pillar 4 of 4</p></div>
+      </div>
+      <span class="tag">Core idea 4</span>
+      <h2 class="title">Subscription model—teams opt in and gain benefits</h2>
+      <p class="lead">Coverage is entitlement-based. Interested teams subscribe repos into the org graph and participate without owning the whole platform.</p>
+      <ul class="bullets">
+        <li>Inclusion in org knowledge &amp; pattern graph</li>
+        <li>Blast-radius &amp; upstream/downstream lineage</li>
+        <li>Release-tag / module upgrade impact before merge</li>
+        <li>Guided change &amp; rollout plans</li>
+        <li>FinOps / EOL attributed to your stacks</li>
+        <li>CAB &amp; audit-ready exports</li>
+        <li>Scan/sync into the shared graph</li>
+      </ul>
+      <div class="shot"><img src="../screenshots/subscriptions.png" alt="Repo Subscriptions" /></div>
+      <p class="shot-caption">Repo Subscriptions — roles, tiers, scan status, opt-in toggles</p>
+    </div>
+    <div class="page-num">5 / 6</div>
+  </section>
+
+  <!-- PAGE 6: AI + Milvus -->
+  <section class="page" id="page-6">
+    <div class="inner">
+      <div class="brand">
+        <div class="brand-mark">IG</div>
+        <div><h1>InfraGraph</h1><p>AI · Milvus</p></div>
+      </div>
+      <span class="tag">Intelligence layer</span>
+      <h2 class="title">Where we use AI &amp; Milvus wisely</h2>
+      <p class="lead">Vectors assist; rules protect accuracy. Chat and upgrade analysis sit on top of graph truth—not instead of it.</p>
+
+      <div class="box">
+        <h3>Today — used where it adds signal</h3>
+        <ul>
+          <li><strong>Milvus <code>infra_interactions</code></strong> — store exhaustive Layer-1 interaction signatures (VPC, SG, CIDR, ports, HA facts) extracted from the graph.</li>
+          <li><strong>Milvus <code>infra_patterns</code></strong> — canonical pattern template vectors for similarity lookup.</li>
+          <li><strong>Hybrid pattern derive</strong> — family / HA / port <em>rules first</em>; vectors confirm or suggest only when rules don’t match. Prevents “pretty but wrong” pattern stamps.</li>
+          <li><strong>Milvus <code>iac_patterns</code></strong> — IaC chunk embeddings for similar-repo / fleet pattern detection.</li>
+          <li><strong>Release Compare AI</strong> — upgrade paths, restart/downtime hints, doc-aware notes; <strong>engineer chat</strong> scoped to Raise PR workbench.</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <h3>Why this is “wise”</h3>
+        <ul>
+          <li>Graph (Neo4j) + Postgres remain source of truth for lineage, cost, and CAB evidence.</li>
+          <li>Milvus is a <em>similarity index</em>, not the authority for security or HA topology.</li>
+          <li>AI chat is bounded to release/PR context—not a free-floating chatbot inventing blast radius.</li>
+        </ul>
+      </div>
+
+      <div class="box">
+        <h3>Future enhancements</h3>
+        <ul>
+          <li>Richer embeddings (real model vs local hash) for cross-org pattern search &amp; duplicate-module detection.</li>
+          <li>Vector-assisted blast-radius ranking (“most similar past incidents / upgrades”).</li>
+          <li>Milvus-backed RAG over AWS/module docs inside Release Compare chat.</li>
+          <li>Natural-language ask across subscribed estate (“which apps still pin vpc &lt; v3?”).</li>
+          <li>Automated remediation PRs grounded in graph + approved pattern stamps.</li>
+          <li>Continuous CVE / policy retrieval ranked by business blast radius.</li>
+        </ul>
+      </div>
+
+      <div class="shot"><img src="../screenshots/release-compare-ai.png" alt="AI workbench" /></div>
+      <p class="shot-caption">Release Compare — AI recommendations live in the engineer workbench</p>
+      <p class="footer">InfraGraph · Change Intelligence · Demo: localhost:3000/pitch</p>
+    </div>
+    <div class="page-num">6 / 6</div>
+  </section>
+
+</body>
+</html>

@@ -15,12 +15,14 @@ import {
   Settings,
   Shield,
   ArrowLeftRight,
+  Sparkles,
 } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { ORG } from '../data/mockData';
 
 const nav = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/pitch', icon: Sparkles, label: 'Why InfraGraph' },
   { to: '/impact/modules-vpc', icon: Network, label: 'Blast Radius' },
   { to: '/dependencies', icon: GitBranch, label: 'Dependency Tree' },
   { to: '/graph/infra', icon: Network, label: 'Infra Graph' },
@@ -33,7 +35,7 @@ const nav = [
   { to: '/observability', icon: Eye, label: 'Observability' },
   { to: '/eol', icon: AlertTriangle, label: 'EOL & Extended Support' },
   { to: '/repos', icon: FolderGit2, label: 'Repo Subscriptions' },
-  { to: '/activity', icon: Activity, label: 'Scan Activity' },
+  { to: '/scanner', icon: Activity, label: 'Scanner Monitor' },
   { to: '/reports', icon: FileDown, label: 'CAB Reports' },
   { to: '/audit', icon: Shield, label: 'Audit Log' },
   { to: '/admin', icon: Settings, label: 'Admin' },

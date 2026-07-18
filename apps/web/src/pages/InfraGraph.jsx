@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Layers, Network, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
+import { CheckCircle2, Layers, Maximize2, Minimize2, Network, ShieldCheck, Wifi, WifiOff } from 'lucide-react';
 import Header from '../components/Header';
 import DependencyGraph from '../components/DependencyGraph';
+import ArchitectureDiagram from '../components/ArchitectureDiagram';
 import { PageShell, SectionTitle } from '../components/ui';
 import { api } from '../api/client';
 import { DEFAULT_MODULE_SLUG } from '../config/blastRadiusModules';
@@ -26,6 +27,7 @@ export default function InfraGraph() {
   const appsvnParam = searchParams.get('appsvn') || '';
   const familyParam = searchParams.get('family') || '';
   const patternParam = searchParams.get('patternId') || '';
+  const fullView = searchParams.get('fullView') === '1';
 
   const [apps, setApps] = useState([]);
   const [selectedAppsvn, setSelectedAppsvn] = useState(appsvnParam);
@@ -167,6 +169,13 @@ export default function InfraGraph() {
     };
   }, [tab, selectedPatternId]);
 
+  const setFullView = (on) => {
+    const params = new URLSearchParams(searchParams);
+    if (on) params.set('fullView', '1');
+    else params.delete('fullView');
+    setSearchParams(params);
+  };
+
   const setTab = (next) => {
     const params = new URLSearchParams(searchParams);
     params.set('tab', next);
@@ -174,6 +183,7 @@ export default function InfraGraph() {
       params.set('appsvn', selectedAppsvn);
       params.delete('family');
       params.delete('patternId');
+      params.delete('fullView');
     } else {
       params.delete('appsvn');
       if (selectedFamily) params.set('family', selectedFamily);
@@ -201,6 +211,7 @@ export default function InfraGraph() {
     if (value) params.set('family', value);
     else params.delete('family');
     params.delete('patternId');
+    params.delete('fullView');
     setSearchParams(params);
   };
 
@@ -211,7 +222,10 @@ export default function InfraGraph() {
     params.set('tab', 'patterns');
     if (selectedFamily) params.set('family', selectedFamily);
     if (next) params.set('patternId', next);
-    else params.delete('patternId');
+    else {
+      params.delete('patternId');
+      params.delete('fullView');
+    }
     setSearchParams(params);
   };
 
@@ -227,12 +241,11 @@ export default function InfraGraph() {
   );
 
   const graph = data?.graph || { nodes: [], edges: [] };
-  const architectureGraph = architecture?.graph || architecture || null;
+  const showingArchitecture = tab === 'patterns' && !!selectedPatternId && !!(architecture?.nodes?.length || architecture?.lanes?.length);
+
   const displayGraph = useMemo(() => {
-    const base =
-      tab === 'patterns' && selectedPatternId && architectureGraph?.nodes?.length
-        ? { nodes: architectureGraph.nodes, edges: architectureGraph.edges || [] }
-        : graph;
+    // Layer-2 / catalog overview still uses DependencyGraph
+    const base = graph;
     if (!selectedNodeId) return base;
     const neighborIds = new Set([selectedNodeId]);
     for (const e of base.edges || []) {
@@ -243,9 +256,7 @@ export default function InfraGraph() {
       nodes: (base.nodes || []).filter((n) => neighborIds.has(n.id)),
       edges: (base.edges || []).filter((e) => neighborIds.has(e.from) && neighborIds.has(e.to)),
     };
-  }, [graph, selectedNodeId, tab, selectedPatternId, architectureGraph]);
-
-  const showingArchitecture = tab === 'patterns' && !!selectedPatternId && !!architectureGraph?.nodes?.length;
+  }, [graph, selectedNodeId]);
 
   const patterns = data?.patterns;
   const title = tab === 'application' ? 'Infra Graph · By Application' : 'Infra Graph · Patterns';
@@ -282,6 +293,7 @@ export default function InfraGraph() {
 
   return (
     <PageShell
+      contentClassName={fullView ? 'px-4 py-4 md:px-6' : ''}
       header={
         <Header
           title={title}
@@ -292,6 +304,17 @@ export default function InfraGraph() {
                 {live ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
                 {live ? 'Live' : 'Offline'}
               </span>
+              {showingArchitecture && (
+                <button
+                  type="button"
+                  onClick={() => setFullView(!fullView)}
+                  className="btn-secondary inline-flex items-center gap-1.5"
+                  title={fullView ? 'Exit full view' : 'Full view — hide sidebar, widen canvas'}
+                >
+                  {fullView ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                  {fullView ? 'Exit full view' : 'Full view'}
+                </button>
+              )}
               <Link to={`/impact/${DEFAULT_MODULE_SLUG}`} className="btn-secondary inline-flex items-center gap-1.5">
                 <Network className="h-3.5 w-3.5" />
                 Blast Radius
@@ -352,13 +375,13 @@ export default function InfraGraph() {
         )}
       </div>
 
-      <p className="mb-4 max-w-3xl text-xs leading-relaxed text-slate-400">
+      <p className={`mb-4 max-w-3xl text-xs leading-relaxed text-slate-400 ${fullView ? 'hidden' : ''}`}>
         {tab === 'patterns'
           ? 'Architect / auditor workbench: pick a technical resource family, inspect simple vs complex implementations, stamp a Layer-1 pattern to inherit compliance coverage across APPSVN apps on that pattern.'
           : 'Select an APPSVN to see only the infra graph for that application (repos/stacks/resources linked to the tag). Use Blast Radius for module impact drills.'}
       </p>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className={`mb-4 flex flex-wrap gap-2 ${fullView ? 'hidden' : ''}`}>
         <span className="badge-info">{data?.counts?.repositories ?? 0} repos</span>
         <span className="badge-neutral">{data?.counts?.graph_nodes ?? 0} nodes</span>
         <span className="badge-neutral">{data?.counts?.graph_edges ?? 0} edges</span>
@@ -383,7 +406,7 @@ export default function InfraGraph() {
 
       {error && <p className="mb-4 text-xs text-amber-400">{error}</p>}
 
-      {tab === 'patterns' && (
+      {tab === 'patterns' && !fullView && (
         <div className="mb-6">
           <SectionTitle>Pattern catalog</SectionTitle>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -418,6 +441,32 @@ export default function InfraGraph() {
                   <div className="mt-2 line-clamp-2 text-[10px] leading-relaxed text-slate-500">
                     {p.architect_summary}
                   </div>
+                  {(p.pros || p.cons) && (
+                    <div className="mt-2 grid grid-cols-2 gap-1.5 text-[9px] leading-snug">
+                      <div className="rounded border border-emerald-500/20 bg-emerald-500/5 px-1.5 py-1 text-emerald-200/90">
+                        <div className="mb-0.5 font-semibold uppercase tracking-wide text-emerald-400/80">Pros</div>
+                        <ul className="space-y-0.5">
+                          {(p.pros?.architect || []).slice(0, 1).map((x) => (
+                            <li key={x}>· {x}</li>
+                          ))}
+                          {(p.pros?.finops || []).slice(0, 1).map((x) => (
+                            <li key={x}>· {x}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="rounded border border-rose-500/20 bg-rose-500/5 px-1.5 py-1 text-rose-200/90">
+                        <div className="mb-0.5 font-semibold uppercase tracking-wide text-rose-400/80">Cons</div>
+                        <ul className="space-y-0.5">
+                          {(p.cons?.architect || []).slice(0, 1).map((x) => (
+                            <li key={x}>· {x}</li>
+                          ))}
+                          {(p.cons?.risk || []).slice(0, 1).map((x) => (
+                            <li key={x}>· {x}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
                     <span className="badge-info">{p.family}</span>
                     <span className="badge-neutral">{p.instance_count || 0} instances</span>
@@ -434,8 +483,8 @@ export default function InfraGraph() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-6">
+      <div className={fullView ? 'space-y-6' : 'grid gap-6 lg:grid-cols-3'}>
+        <div className={`${fullView ? '' : 'lg:col-span-2'} space-y-6`}>
           {showingArchitecture && architecture && (
             <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 print:border-slate-300 print:bg-white">
               <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
@@ -446,7 +495,7 @@ export default function InfraGraph() {
                   <div className="font-mono text-xs text-brand-300">{architecture.pattern_id}</div>
                   <div className="text-sm font-medium text-slate-100">{architecture.display_name}</div>
                 </div>
-                <div className="flex flex-wrap gap-1.5 text-[10px]">
+                <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
                   <span className={`badge-${architecture.tier === 'complex' ? 'warning' : 'neutral'}`}>
                     {architecture.tier}
                   </span>
@@ -458,6 +507,25 @@ export default function InfraGraph() {
                   <span className="badge-neutral">
                     {(architecture.covered_apps || []).length} apps covered
                   </span>
+                  {fullView ? (
+                    <button
+                      type="button"
+                      onClick={() => setFullView(false)}
+                      className="btn-secondary inline-flex items-center gap-1.5 text-[11px]"
+                    >
+                      <Minimize2 className="h-3.5 w-3.5" />
+                      Exit full view
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setFullView(true)}
+                      className="btn-secondary inline-flex items-center gap-1.5 text-[11px]"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" />
+                      Full view
+                    </button>
+                  )}
                 </div>
               </div>
               {(architecture.flow_summary || []).length > 0 && (
@@ -480,6 +548,12 @@ export default function InfraGraph() {
                 {architecture.sources?.postgres && <span className="badge-info">postgres</span>}
                 {architecture.sources?.neo4j && <span className="badge-info">neo4j</span>}
                 {architecture.sources?.seed && <span className="badge-neutral">seed fill</span>}
+                {architecture.interactions_count != null && (
+                  <span className="badge-info">{architecture.interactions_count} interactions → milvus</span>
+                )}
+                {architecture.milvus_sync && (
+                  <span className="badge-neutral">milvus: {architecture.milvus_sync}</span>
+                )}
               </div>
             </div>
           )}
@@ -489,7 +563,7 @@ export default function InfraGraph() {
               {tab === 'application'
                 ? `Application graph${data?.appsvn ? ` · ${data.appsvn}` : ''}`
                 : showingArchitecture
-                  ? `Architecture diagram · ${selectedPatternId}`
+                  ? `AWS architecture canvas · ${selectedPatternId}`
                   : selectedPatternId
                     ? `Pattern graph · ${selectedPatternId}`
                     : selectedFamily
@@ -499,16 +573,26 @@ export default function InfraGraph() {
             <div className="card">
               <div className="card-body">
                 {loading || (selectedPatternId && archLoading) ? (
-                  <div className="flex h-[520px] items-center justify-center text-sm text-slate-500">
+                  <div
+                    className={`flex items-center justify-center text-sm text-slate-500 ${fullView ? 'h-[720px]' : 'h-[520px]'}`}
+                  >
                     Loading {showingArchitecture || selectedPatternId ? 'architecture' : tab === 'application' ? 'application' : 'pattern'}…
                   </div>
+                ) : showingArchitecture && architecture ? (
+                  <ArchitectureDiagram
+                    architecture={architecture}
+                    selectedNodeId={selectedNodeId}
+                    onNodeClick={(n) => setSelectedNodeId((prev) => (prev === n.id ? null : n.id))}
+                    height={fullView ? 880 : 640}
+                    fullView={fullView}
+                  />
                 ) : (
                   <DependencyGraph
                     nodes={displayGraph.nodes}
                     edges={displayGraph.edges}
                     selectedNodeId={selectedNodeId}
                     onNodeClick={(n) => setSelectedNodeId((prev) => (prev === n.id ? null : n.id))}
-                    slice={showingArchitecture ? 'architecture' : 'lineage'}
+                    slice={tab === 'application' ? 'lineage' : 'lineage'}
                     height={520}
                   />
                 )}
@@ -600,120 +684,31 @@ export default function InfraGraph() {
               )}
             </div>
           )}
+
+          {fullView && tab === 'patterns' && selectedPattern && (
+            <PatternDetailPanel
+              selectedPattern={selectedPattern}
+              stampForm={stampForm}
+              setStampForm={setStampForm}
+              stampBusy={stampBusy}
+              stampMsg={stampMsg}
+              onStamp={onStamp}
+              fullView
+            />
+          )}
         </div>
 
+        {!fullView && (
         <div className="space-y-6">
           {tab === 'patterns' && selectedPattern && (
-            <div>
-              <SectionTitle>Pattern detail</SectionTitle>
-              <div className="card space-y-3 p-3">
-                <div className="font-mono text-[11px] text-brand-300">{selectedPattern.pattern_id}</div>
-                <div className="text-xs text-slate-200">{selectedPattern.display_name}</div>
-                <div className="rounded border border-white/5 bg-black/20 p-2 text-[10px] leading-relaxed text-slate-400">
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Audit</div>
-                  {selectedPattern.audit_statement}
-                </div>
-                <div className="rounded border border-white/5 bg-black/20 p-2 text-[10px] leading-relaxed text-slate-400">
-                  <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">FinOps</div>
-                  {selectedPattern.finops_notes}
-                </div>
-                <div className="flex flex-wrap gap-1.5 text-[10px]">
-                  <span className={`badge-${selectedPattern.tier === 'complex' ? 'warning' : 'neutral'}`}>
-                    {selectedPattern.tier}
-                  </span>
-                  <span className="badge-info">{selectedPattern.family}</span>
-                  <span className="badge-neutral">{selectedPattern.instance_count} instances</span>
-                </div>
-                {(selectedPattern.detection_signals || []).length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {selectedPattern.detection_signals.map((s) => (
-                      <span key={s} className="badge-info text-[10px]">
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                <div>
-                  <div className="mb-1.5 text-[10px] uppercase tracking-wide text-slate-500">
-                    Covered apps (inherited on stamp)
-                  </div>
-                  {(selectedPattern.covered_apps || []).length ? (
-                    selectedPattern.covered_apps.map((a) => (
-                      <div
-                        key={a.appsvn}
-                        className="mb-1 flex items-center justify-between rounded border border-white/5 px-2 py-1 text-[11px]"
-                      >
-                        <span>
-                          <span className="font-mono text-brand-300">{a.appsvn}</span>
-                          <span className="ml-1.5 text-slate-500">{a.label}</span>
-                        </span>
-                        <span className="text-[10px] text-slate-500">
-                          {a.inherited ? 'inherited' : 'direct'} · {a.repo_ids?.length || 0} repos
-                        </span>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-[11px] text-slate-500">
-                      No APPSVN coverage yet — stamp still records the control; apps appear when consumers use this pattern.
-                    </p>
-                  )}
-                </div>
-
-                {selectedPattern.stamp && (
-                  <div className="rounded border border-emerald-500/20 bg-emerald-500/5 px-2 py-2 text-[11px] text-emerald-200">
-                    <div className="flex items-center gap-1 font-medium">
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      Stamped by {selectedPattern.stamp.auditor}
-                    </div>
-                    <div className="mt-1 text-[10px] text-emerald-200/70">
-                      {selectedPattern.stamp.compliance_framework || 'framework n/a'}
-                      {selectedPattern.stamp.comment ? ` · ${selectedPattern.stamp.comment}` : ''}
-                    </div>
-                  </div>
-                )}
-
-                <div className="border-t border-white/10 pt-3">
-                  <div className="mb-2 text-[10px] uppercase tracking-wide text-slate-500">Stamp / approve</div>
-                  <label className="mb-2 block text-[10px] text-slate-500">
-                    Auditor
-                    <input
-                      className="mt-0.5 w-full rounded border border-white/10 bg-surface-900 px-2 py-1.5 text-xs text-slate-200"
-                      value={stampForm.auditor}
-                      onChange={(e) => setStampForm((f) => ({ ...f, auditor: e.target.value }))}
-                    />
-                  </label>
-                  <label className="mb-2 block text-[10px] text-slate-500">
-                    Framework
-                    <input
-                      className="mt-0.5 w-full rounded border border-white/10 bg-surface-900 px-2 py-1.5 text-xs text-slate-200"
-                      value={stampForm.compliance_framework}
-                      onChange={(e) => setStampForm((f) => ({ ...f, compliance_framework: e.target.value }))}
-                      placeholder="SOC2 / PCI-DSS / ISO27001"
-                    />
-                  </label>
-                  <label className="mb-2 block text-[10px] text-slate-500">
-                    Comment
-                    <textarea
-                      className="mt-0.5 w-full rounded border border-white/10 bg-surface-900 px-2 py-1.5 text-xs text-slate-200"
-                      rows={2}
-                      value={stampForm.comment}
-                      onChange={(e) => setStampForm((f) => ({ ...f, comment: e.target.value }))}
-                      placeholder="Evidence note for external audit package"
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    disabled={stampBusy || !stampForm.auditor.trim()}
-                    onClick={onStamp}
-                    className="btn-primary w-full text-xs disabled:opacity-50"
-                  >
-                    {stampBusy ? 'Stamping…' : selectedPattern.stamped ? 'Re-stamp pattern' : 'Stamp pattern'}
-                  </button>
-                  {stampMsg && <p className="mt-2 text-[10px] text-slate-400">{stampMsg}</p>}
-                </div>
-              </div>
-            </div>
+            <PatternDetailPanel
+              selectedPattern={selectedPattern}
+              stampForm={stampForm}
+              setStampForm={setStampForm}
+              stampBusy={stampBusy}
+              stampMsg={stampMsg}
+              onStamp={onStamp}
+            />
           )}
 
           {tab === 'patterns' && !selectedPattern && (
@@ -812,6 +807,7 @@ export default function InfraGraph() {
             </div>
           )}
         </div>
+        )}
       </div>
     </PageShell>
   );
@@ -821,4 +817,166 @@ function blastPathForRepo(repoId) {
   if (String(repoId).includes('storage')) return '/impact/modules-storage';
   if (String(repoId).includes('database') || String(repoId).includes('rds')) return '/impact/modules-rds';
   return `/impact/${DEFAULT_MODULE_SLUG}`;
+}
+
+function PatternDetailPanel({
+  selectedPattern,
+  stampForm,
+  setStampForm,
+  stampBusy,
+  stampMsg,
+  onStamp,
+  fullView = false,
+}) {
+  return (
+    <div>
+      <SectionTitle>Pattern detail</SectionTitle>
+      <div
+        className={`card space-y-3 p-3 ${fullView ? '' : 'lg:sticky lg:top-4'} ${
+          fullView ? 'grid gap-4 md:grid-cols-2 xl:grid-cols-3' : ''
+        }`}
+      >
+        <div className={fullView ? 'space-y-3' : 'contents'}>
+          <div className="font-mono text-[11px] text-brand-300">{selectedPattern.pattern_id}</div>
+          <div className="text-xs text-slate-200">{selectedPattern.display_name}</div>
+          <div className="rounded border border-white/5 bg-black/20 p-2 text-[10px] leading-relaxed text-slate-400">
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">Audit</div>
+            {selectedPattern.audit_statement}
+          </div>
+          <div className="rounded border border-white/5 bg-black/20 p-2 text-[10px] leading-relaxed text-slate-400">
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-500">FinOps</div>
+            {selectedPattern.finops_notes}
+          </div>
+          <div className="flex flex-wrap gap-1.5 text-[10px]">
+            <span className={`badge-${selectedPattern.tier === 'complex' ? 'warning' : 'neutral'}`}>
+              {selectedPattern.tier}
+            </span>
+            <span className="badge-info">{selectedPattern.family}</span>
+            <span className="badge-neutral">{selectedPattern.instance_count} instances</span>
+          </div>
+          {(selectedPattern.detection_signals || []).length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {selectedPattern.detection_signals.map((s) => (
+                <span key={s} className="badge-info text-[10px]">
+                  {s}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {(selectedPattern.pros || selectedPattern.cons) && (
+          <div className={`grid gap-2 ${fullView ? 'grid-cols-1 sm:grid-cols-2 md:col-span-1' : 'grid-cols-1'}`}>
+            <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2 text-[10px] text-emerald-100/90">
+              <div className="mb-1 font-semibold uppercase tracking-wide text-emerald-400/80">Pros</div>
+              <ProsConsBlock title="Architect" items={selectedPattern.pros?.architect} />
+              <ProsConsBlock title="FinOps" items={selectedPattern.pros?.finops} />
+              <ProsConsBlock title="Risk" items={selectedPattern.pros?.risk} />
+            </div>
+            <div className="rounded border border-rose-500/20 bg-rose-500/5 p-2 text-[10px] text-rose-100/90">
+              <div className="mb-1 font-semibold uppercase tracking-wide text-rose-400/80">Cons</div>
+              <ProsConsBlock title="Architect" items={selectedPattern.cons?.architect} />
+              <ProsConsBlock title="FinOps" items={selectedPattern.cons?.finops} />
+              <ProsConsBlock title="Risk" items={selectedPattern.cons?.risk} />
+            </div>
+          </div>
+        )}
+
+        <div className={fullView ? 'space-y-3' : 'contents'}>
+          <div>
+            <div className="mb-1.5 text-[10px] uppercase tracking-wide text-slate-500">
+              Covered apps (inherited on stamp)
+            </div>
+            {(selectedPattern.covered_apps || []).length ? (
+              selectedPattern.covered_apps.map((a) => (
+                <div
+                  key={a.appsvn}
+                  className="mb-1 flex items-center justify-between rounded border border-white/5 px-2 py-1 text-[11px]"
+                >
+                  <span>
+                    <span className="font-mono text-brand-300">{a.appsvn}</span>
+                    <span className="ml-1.5 text-slate-500">{a.label}</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {a.inherited ? 'inherited' : 'direct'} · {a.repo_ids?.length || 0} repos
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-[11px] text-slate-500">
+                No APPSVN coverage yet — stamp still records the control; apps appear when consumers use this pattern.
+              </p>
+            )}
+          </div>
+
+          {selectedPattern.stamp && (
+            <div className="rounded border border-emerald-500/20 bg-emerald-500/5 px-2 py-2 text-[11px] text-emerald-200">
+              <div className="flex items-center gap-1 font-medium">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Stamped by {selectedPattern.stamp.auditor}
+              </div>
+              <div className="mt-1 text-[10px] text-emerald-200/70">
+                {selectedPattern.stamp.compliance_framework || 'framework n/a'}
+                {selectedPattern.stamp.comment ? ` · ${selectedPattern.stamp.comment}` : ''}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-white/10 pt-3">
+            <div className="mb-2 text-[10px] uppercase tracking-wide text-slate-500">Stamp / approve</div>
+            <label className="mb-2 block text-[10px] text-slate-500">
+              Auditor
+              <input
+                className="mt-0.5 w-full rounded border border-white/10 bg-surface-900 px-2 py-1.5 text-xs text-slate-200"
+                value={stampForm.auditor}
+                onChange={(e) => setStampForm((f) => ({ ...f, auditor: e.target.value }))}
+              />
+            </label>
+            <label className="mb-2 block text-[10px] text-slate-500">
+              Framework
+              <input
+                className="mt-0.5 w-full rounded border border-white/10 bg-surface-900 px-2 py-1.5 text-xs text-slate-200"
+                value={stampForm.compliance_framework}
+                onChange={(e) => setStampForm((f) => ({ ...f, compliance_framework: e.target.value }))}
+                placeholder="SOC2 / PCI-DSS / ISO27001"
+              />
+            </label>
+            <label className="mb-2 block text-[10px] text-slate-500">
+              Comment
+              <textarea
+                className="mt-0.5 w-full rounded border border-white/10 bg-surface-900 px-2 py-1.5 text-xs text-slate-200"
+                rows={2}
+                value={stampForm.comment}
+                onChange={(e) => setStampForm((f) => ({ ...f, comment: e.target.value }))}
+                placeholder="Evidence note for external audit package"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={stampBusy || !stampForm.auditor.trim()}
+              onClick={onStamp}
+              className="btn-primary w-full text-xs disabled:opacity-50"
+            >
+              {stampBusy ? 'Stamping…' : selectedPattern.stamped ? 'Re-stamp pattern' : 'Stamp pattern'}
+            </button>
+            {stampMsg && <p className="mt-2 text-[10px] text-slate-400">{stampMsg}</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProsConsBlock({ title, items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="mb-1.5">
+      <div className="text-[9px] uppercase tracking-wide opacity-70">{title}</div>
+      <ul className="mt-0.5 space-y-0.5 leading-snug">
+        {items.map((x) => (
+          <li key={x}>· {x}</li>
+        ))}
+      </ul>
+    </div>
+  );
 }

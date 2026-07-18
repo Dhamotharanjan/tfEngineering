@@ -10,9 +10,16 @@ import {
   taxonomyById,
 } from './pattern-classifier';
 import { ArchitecturePayload, composeArchitecture, LiveNetworkResource, Neo4jTopoEdge } from './pattern-architecture';
+import {
+  canonicalPatternSignatures,
+  extractInteractionsFromArchitecture,
+  InteractionRecord,
+} from './pattern-interactions';
 
 @Injectable()
 export class PatternService implements OnModuleInit {
+  private readonly aiUrl = process.env.AI_SERVICE_URL || 'http://ai:8100';
+
   constructor(
     private db: DbService,
     private graph: GraphService,
@@ -20,6 +27,30 @@ export class PatternService implements OnModuleInit {
 
   async onModuleInit() {
     await this.ensureCatalogSeeded();
+    // Warm Milvus canonical templates (non-blocking)
+    this.aiPost('/infra/patterns/seed', {}).catch(() => undefined);
+  }
+
+  private async aiPost(path: string, body: Record<string, unknown>): Promise<any> {
+    const res = await fetch(`${this.aiUrl}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`AI ${path} HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
+    return res.json().catch(() => ({}));
+  }
+
+  private async aiGet(path: string): Promise<any> {
+    const res = await fetch(`${this.aiUrl}${path}`);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new Error(`AI ${path} HTTP ${res.status}: ${text.slice(0, 200)}`);
+    }
+    return res.json().catch(() => ({}));
   }
 
   /** Upsert taxonomy into infra_patterns for volumes that predate schema seed. */
@@ -495,7 +526,10 @@ export class PatternService implements OnModuleInit {
    * Single-shot architect + auditor architecture view for a Layer-1 pattern:
    * AWS-role nodes, ingress/egress with port/protocol, topology facts, seed fill.
    */
-  async getPatternArchitecture(patternId: string): Promise<ArchitecturePayload> {
+  async getPatternArchitecture(
+    patternId: string,
+    opts: { syncMilvus?: boolean } = {},
+  ): Promise<ArchitecturePayload> {
     const def = taxonomyById(patternId);
     if (!def) throw new NotFoundException(`Unknown pattern ${patternId}`);
 
@@ -592,7 +626,7 @@ export class PatternService implements OnModuleInit {
       neo4jEdges = [];
     }
 
-    return composeArchitecture({
+    const arch = composeArchitecture({
       def,
       instances: classified,
       networkResources,
@@ -600,5 +634,118 @@ export class PatternService implements OnModuleInit {
       coveredApps: coverage.apps,
       stamp,
     });
+
+    // Fire-and-forget: exhaustive interactions → Milvus (accuracy-first pattern store)
+    if (opts.syncMilvus !== false) {
+      const interactions = extractInteractionsFromArchitecture(arch, classified);
+      this.pushInteractionsToMilvus(interactions, def.family, patternId).catch(() => undefined);
+      return {
+        ...arch,
+        interactions_count: interactions.length,
+        milvus_sync: 'queued',
+      } as ArchitecturePayload & { interactions_count: number; milvus_sync: string };
+    }
+
+    return arch;
+  }
+
+  private async pushInteractionsToMilvus(
+    interactions: InteractionRecord[],
+    family: string,
+    patternId: string,
+  ) {
+    if (!interactions.length) return null;
+    const ingest = await this.aiPost('/infra/interactions/ingest', { interactions });
+    const derive = await this.aiPost('/infra/patterns/derive', {
+      interactions,
+      family,
+      pattern_hint: patternId,
+    });
+    return { ingest, derive };
+  }
+
+  /** Backfill all patterns' interactions into Milvus + seed canonical templates. */
+  async syncInteractionsToMilvus(opts: { patternId?: string } = {}) {
+    await this.ensureCatalogSeeded();
+    let seed: any = null;
+    try {
+      seed = await this.aiPost('/infra/patterns/seed', {});
+    } catch (e) {
+      seed = { status: 'error', error: String(e) };
+    }
+
+    const defs = opts.patternId
+      ? PATTERN_TAXONOMY.filter((p) => p.pattern_id === opts.patternId)
+      : PATTERN_TAXONOMY;
+
+    const allInteractions: InteractionRecord[] = [];
+    const perPattern: any[] = [];
+
+    for (const def of defs) {
+      try {
+        const arch = await this.getPatternArchitecture(def.pattern_id, { syncMilvus: false });
+        const classified = (await this.loadResources()).filter((c) => c.pattern_id === def.pattern_id);
+        const interactions = extractInteractionsFromArchitecture(arch, classified);
+        interactions.push(...canonicalPatternSignatures(def));
+        allInteractions.push(...interactions);
+        perPattern.push({
+          pattern_id: def.pattern_id,
+          interactions: interactions.length,
+        });
+      } catch (e) {
+        perPattern.push({ pattern_id: def.pattern_id, error: String(e) });
+      }
+    }
+
+    const byId = new Map<string, InteractionRecord>();
+    for (const i of allInteractions) byId.set(i.id, i);
+    const unique = [...byId.values()];
+
+    let ingest: any = null;
+    let deriveSamples: any[] = [];
+    try {
+      ingest = await this.aiPost('/infra/interactions/ingest', { interactions: unique });
+      for (const def of defs.slice(0, 4)) {
+        const sample = unique.filter((i) => i.pattern_id === def.pattern_id);
+        if (!sample.length) continue;
+        try {
+          const d = await this.aiPost('/infra/patterns/derive', {
+            interactions: sample,
+            family: def.family,
+            pattern_hint: def.pattern_id,
+          });
+          deriveSamples.push({ pattern_id: def.pattern_id, derive: d });
+        } catch {
+          /* skip */
+        }
+      }
+    } catch (e) {
+      ingest = { status: 'error', error: String(e) };
+    }
+
+    let status: any = null;
+    try {
+      status = await this.aiGet('/infra/milvus/status');
+    } catch (e) {
+      status = { status: 'error', error: String(e) };
+    }
+
+    return {
+      status: ingest?.status === 'upserted' || ingest?.status === 'ok' ? 'synced' : 'partial',
+      seed,
+      ingest,
+      total_interactions: unique.length,
+      per_pattern: perPattern,
+      derive_samples: deriveSamples,
+      milvus: status,
+    };
+  }
+
+  async milvusStatus() {
+    try {
+      return await this.aiGet('/infra/milvus/status');
+    } catch (e) {
+      return { status: 'error', error: String(e) };
+    }
   }
 }

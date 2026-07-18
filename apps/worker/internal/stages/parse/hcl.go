@@ -14,7 +14,8 @@ import (
 
 // ParseOptions configures deep HCL parsing behavior from scan profiles.
 type ParseOptions struct {
-	Profile *config.ScanProfile
+	Profile    *config.ScanProfile
+	AllowFiles map[string]struct{} // if non-nil, only parse these relative paths
 }
 
 // Stage 3: Structural parse — deep HCL/Terragrunt extraction.
@@ -35,6 +36,12 @@ func ParseRepo(workDir, repoID string, opts *ParseOptions) (*models.ParseResult,
 		}
 		rel, _ := filepath.Rel(workDir, path)
 		rel = filepath.ToSlash(rel)
+
+		if opts.AllowFiles != nil {
+			if _, ok := opts.AllowFiles[rel]; !ok {
+				return nil
+			}
+		}
 
 		if strings.HasSuffix(lower, "terragrunt.hcl") {
 			stack, tgBlocks, err := parseTerragruntFile(parser, path, rel, opts.Profile)
@@ -76,6 +83,15 @@ func ParseRepo(workDir, repoID string, opts *ParseOptions) (*models.ParseResult,
 // ParseRepoWithProfile is a convenience wrapper used by the pipeline.
 func ParseRepoWithProfile(workDir, repoID string, profile *config.ScanProfile) (*models.ParseResult, error) {
 	return ParseRepo(workDir, repoID, &ParseOptions{Profile: profile})
+}
+
+// ParseRepoFiltered parses only the given relative file paths (incremental).
+func ParseRepoFiltered(workDir, repoID string, profile *config.ScanProfile, files []string) (*models.ParseResult, error) {
+	allow := make(map[string]struct{}, len(files))
+	for _, f := range files {
+		allow[filepath.ToSlash(f)] = struct{}{}
+	}
+	return ParseRepo(workDir, repoID, &ParseOptions{Profile: profile, AllowFiles: allow})
 }
 
 func FormatAddress(blockType string, labels []string) string {

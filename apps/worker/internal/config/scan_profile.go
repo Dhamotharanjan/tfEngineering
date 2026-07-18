@@ -11,6 +11,7 @@ import (
 // ScanProfile is the typed view of config/scan-profiles.json.
 type ScanProfile struct {
 	ProfileID              string                       `json:"profile_id"`
+	Triggers               ScanTriggers                 `json:"triggers"`
 	TerraformScanFields    TerraformScanFields          `json:"terraform_scan_fields"`
 	TerragruntScanFields   TerragruntScanFields         `json:"terragrunt_scan_fields"`
 	MetadataScanFields     map[string]any               `json:"metadata_scan_fields"`
@@ -18,6 +19,60 @@ type ScanProfile struct {
 	EOLTrackingFields      map[string]EOLTrackingRule   `json:"eol_tracking_fields"`
 	SecurityScanFields     map[string]SecurityScanRule  `json:"security_scan_fields"`
 	Redaction              RedactionRules               `json:"redaction"`
+}
+
+type ScanTriggers struct {
+	ReleaseTag        TriggerReleaseTag `json:"release_tag"`
+	PullRequest       TriggerPR         `json:"pull_request"`
+	PushDefaultBranch TriggerPush       `json:"push_default_branch"`
+	Schedule          TriggerSchedule   `json:"schedule"`
+}
+
+type TriggerReleaseTag struct {
+	Enabled                 bool     `json:"enabled"`
+	TagPatterns             []string `json:"tag_patterns"`
+	MandatoryImpactAnalysis bool     `json:"mandatory_impact_analysis"`
+}
+
+type TriggerPR struct {
+	Enabled     bool     `json:"enabled"`
+	PathsFilter []string `json:"paths_filter"`
+}
+
+type TriggerPush struct {
+	Enabled         bool `json:"enabled"`
+	IncrementalOnly bool `json:"incremental_only"`
+}
+
+type TriggerSchedule struct {
+	FullReconcileCron string `json:"full_reconcile_cron"`
+	EOLCheckCron      string `json:"eol_check_cron"`
+	FinOpsSyncCron    string `json:"finops_sync_cron"`
+}
+
+// PathFiltersForPush returns glob-like path suffixes to include on incremental scans.
+func (p *ScanProfile) PathFiltersForPush() []string {
+	if p == nil {
+		return []string{"**/*.tf", "**/*.hcl"}
+	}
+	if len(p.Triggers.PullRequest.PathsFilter) > 0 {
+		return p.Triggers.PullRequest.PathsFilter
+	}
+	return []string{"**/*.tf", "**/*.hcl"}
+}
+
+func (p *ScanProfile) IncrementalOnlyOnPush() bool {
+	if p == nil {
+		return true
+	}
+	return p.Triggers.PushDefaultBranch.IncrementalOnly
+}
+
+func (p *ScanProfile) FullReconcileCron() string {
+	if p == nil || p.Triggers.Schedule.FullReconcileCron == "" {
+		return "0 2 * * *"
+	}
+	return p.Triggers.Schedule.FullReconcileCron
 }
 
 type TerraformScanFields struct {

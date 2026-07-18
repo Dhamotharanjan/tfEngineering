@@ -1,6 +1,6 @@
-import { Fragment, useCallback, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Plus, RefreshCw } from 'lucide-react';
 import Header from '../components/Header';
 import { PageShell } from '../components/ui';
 import { api } from '../api/client';
@@ -18,6 +18,31 @@ const MOCK_REPO_DETAILS = {
   upstreamLayers: { count: 2, layers: [{ layer: 1 }, { layer: 2 }] },
 };
 
+const SCAN_PROFILES = ['enterprise-aws-default'];
+const TIERS = ['standard', 'professional', 'enterprise'];
+
+const EMPTY_FORM = {
+  github_full_name: '',
+  id: '',
+  role: 'downstream_consumer',
+  entitlement_tier: 'standard',
+  scan_profile: 'enterprise-aws-default',
+  subscribed: true,
+  appsvn: '',
+  application_label: '',
+  local_path: '',
+};
+
+function slugFromGithubFullName(fullName) {
+  return String(fullName || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\//g, '-')
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
 function scanBadge(status) {
   const s = String(status || '').toLowerCase();
   if (s === 'completed') return <span className="badge-success">completed</span>;
@@ -26,6 +51,255 @@ function scanBadge(status) {
     return <span className="badge-warning">{s || 'queued'}</span>;
   }
   return <span className="badge-neutral">{status || 'never'}</span>;
+}
+
+function fieldClassName() {
+  return 'mt-1.5 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500/40';
+}
+
+function SubscribeRepoModal({ open, onClose, onSubmit, loading, error }) {
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [idTouched, setIdTouched] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setForm(EMPTY_FORM);
+      setIdTouched(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  function handleClose() {
+    if (loading) return;
+    onClose();
+  }
+
+  function setField(key, value) {
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'github_full_name' && !idTouched) {
+        next.id = slugFromGithubFullName(value);
+      }
+      return next;
+    });
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const github = form.github_full_name.trim();
+    if (!github) return;
+    await onSubmit({
+      github_full_name: github,
+      id: form.id.trim() || undefined,
+      role: form.role,
+      entitlement_tier: form.entitlement_tier,
+      scan_profile: form.scan_profile,
+      subscribed: form.subscribed,
+      appsvn: form.appsvn.trim() || undefined,
+      application_label: form.application_label.trim() || undefined,
+      local_path: form.local_path.trim() || undefined,
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60"
+        aria-label="Close dialog"
+        onClick={handleClose}
+      />
+      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-2xl shadow-black/40">
+        <div className="border-b border-slate-200 px-5 py-4">
+          <h3 className="font-semibold text-slate-900">Subscribe repo</h3>
+          <p className="mt-1 text-sm text-slate-600">
+            Remote-first: scan by GitHub identity (<code className="text-slate-800">org/repo</code>).
+            No local copy required.
+          </p>
+        </div>
+        <form className="space-y-4 p-5" onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="sub-github" className="block text-xs font-medium text-slate-700">
+              Repository <span className="text-red-600">*</span>
+            </label>
+            <input
+              id="sub-github"
+              type="text"
+              required
+              className={fieldClassName()}
+              placeholder="org/repo"
+              value={form.github_full_name}
+              onChange={(e) => setField('github_full_name', e.target.value)}
+              disabled={loading}
+              autoComplete="off"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="sub-id" className="block text-xs font-medium text-slate-700">
+              Internal id <span className="text-slate-400">(optional)</span>
+            </label>
+            <input
+              id="sub-id"
+              type="text"
+              className={fieldClassName()}
+              placeholder="derived from repo name"
+              value={form.id}
+              onChange={(e) => {
+                setIdTouched(true);
+                setField('id', e.target.value);
+              }}
+              disabled={loading}
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="sub-role" className="block text-xs font-medium text-slate-700">
+                Role
+              </label>
+              <select
+                id="sub-role"
+                className={fieldClassName()}
+                value={form.role}
+                onChange={(e) => setField('role', e.target.value)}
+                disabled={loading}
+              >
+                <option value="downstream_consumer">downstream consumer</option>
+                <option value="module_source">module source</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="sub-tier" className="block text-xs font-medium text-slate-700">
+                Entitlement tier
+              </label>
+              <select
+                id="sub-tier"
+                className={fieldClassName()}
+                value={form.entitlement_tier}
+                onChange={(e) => setField('entitlement_tier', e.target.value)}
+                disabled={loading}
+              >
+                {TIERS.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="sub-profile" className="block text-xs font-medium text-slate-700">
+              Scan profile
+            </label>
+            <select
+              id="sub-profile"
+              className={fieldClassName()}
+              value={form.scan_profile}
+              onChange={(e) => setField('scan_profile', e.target.value)}
+              disabled={loading}
+            >
+              {SCAN_PROFILES.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-slate-800">
+            <input
+              type="checkbox"
+              className="rounded border-slate-300 bg-white text-brand-500 focus:ring-brand-500/40"
+              checked={form.subscribed}
+              onChange={(e) => setField('subscribed', e.target.checked)}
+              disabled={loading}
+            />
+            Subscribed (queues initial remote scan)
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="sub-appsvn" className="block text-xs font-medium text-slate-700">
+                APPSVN <span className="text-slate-400">(optional)</span>
+              </label>
+              <input
+                id="sub-appsvn"
+                type="text"
+                className={fieldClassName()}
+                placeholder="APPSVN-1001"
+                value={form.appsvn}
+                onChange={(e) => setField('appsvn', e.target.value)}
+                disabled={loading}
+                autoComplete="off"
+              />
+            </div>
+            <div>
+              <label htmlFor="sub-label" className="block text-xs font-medium text-slate-700">
+                Application label <span className="text-slate-400">(optional)</span>
+              </label>
+              <input
+                id="sub-label"
+                type="text"
+                className={fieldClassName()}
+                placeholder="Payments Gateway"
+                value={form.application_label}
+                onChange={(e) => setField('application_label', e.target.value)}
+                disabled={loading}
+                autoComplete="off"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="sub-local" className="block text-xs font-medium text-slate-700">
+              Local path <span className="text-slate-400">(advanced / demo only)</span>
+            </label>
+            <input
+              id="sub-local"
+              type="text"
+              className={fieldClassName()}
+              placeholder="mvp_demo/sample_repos/…"
+              value={form.local_path}
+              onChange={(e) => setField('local_path', e.target.value)}
+              disabled={loading}
+              autoComplete="off"
+            />
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              Leave empty for remote GitHub acquisition. Local path is offline/demo only.
+            </p>
+          </div>
+
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-300 bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200 disabled:opacity-40"
+              onClick={handleClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={loading || !form.github_full_name.trim()}
+            >
+              {loading ? 'Subscribing…' : 'Subscribe'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function RepoExpandPanel({ repoId, details, loading }) {
@@ -92,6 +366,9 @@ export default function Repos() {
   const [repoDetails, setRepoDetails] = useState({});
   const [detailsLoading, setDetailsLoading] = useState(null);
   const [message, setMessage] = useState(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(null);
 
   const rows = (data || []).map((r) => ({
     id: r.id,
@@ -121,6 +398,22 @@ export default function Repos() {
     }
   }
 
+  async function handleCreate(body) {
+    setCreating(true);
+    setCreateError(null);
+    setMessage(null);
+    try {
+      const res = await api.createSubscription(body);
+      setMessage(res.message + (res.job?.id ? ` · ${res.job.id}` : ''));
+      setAddOpen(false);
+      await reload?.();
+    } catch (e) {
+      setCreateError(e.message || 'Subscribe failed');
+    } finally {
+      setCreating(false);
+    }
+  }
+
   const toggleSubscribe = useCallback(async (repo) => {
     setBusyId(repo.id);
     setMessage(null);
@@ -140,11 +433,17 @@ export default function Repos() {
     setBusyId(repoId);
     setMessage(null);
     try {
-      await api.triggerScan(repoId);
-      setMessage(`Scan queued for ${repoId}`);
+      const res = await api.triggerScan(repoId);
+      if (res.error) {
+        setMessage(res.message || res.error);
+        return;
+      }
+      setMessage(
+        `Adhoc scan queued for ${repoId}${res.job?.id ? ` (${res.job.id})` : ''} — see Scanner Monitor`,
+      );
       await reload?.();
     } catch (e) {
-      setMessage(e.message || 'Scan failed');
+      setMessage(e.message || 'Adhoc scan failed');
     } finally {
       setBusyId(null);
     }
@@ -193,6 +492,17 @@ export default function Repos() {
               <Link to="/graph/org" className="btn-secondary text-xs">
                 Org graph
               </Link>
+              <button
+                type="button"
+                className="btn-secondary text-xs inline-flex items-center gap-1.5"
+                onClick={() => {
+                  setCreateError(null);
+                  setAddOpen(true);
+                }}
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add repo
+              </button>
               <button type="button" className="btn-primary" onClick={handleSync} disabled={syncing}>
                 {syncing ? 'Syncing…' : 'Sync from config'}
               </button>
@@ -279,12 +589,13 @@ export default function Repos() {
                   <td className="px-5 py-3">
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 text-xs text-brand-400 hover:underline disabled:opacity-50"
+                      className="inline-flex items-center gap-1 text-xs text-brand-400 hover:underline disabled:cursor-not-allowed disabled:opacity-40"
                       disabled={busyId === repo.id || !repo.subscribed}
+                      title={!repo.subscribed ? 'Subscribe first to run an adhoc scan' : 'Queue P1 full_scan (adhoc_ui)'}
                       onClick={() => handleScan(repo.id)}
                     >
                       <RefreshCw className="h-3 w-3" />
-                      Scan
+                      Adhoc scan
                     </button>
                   </td>
                 </tr>
@@ -304,10 +615,24 @@ export default function Repos() {
       </div>
 
       <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
-        Subscriptions decide which repos enter the <strong className="text-slate-300">org knowledge graph</strong>.
+        Subscription grants <strong className="text-slate-300">remote scan rights</strong> on a repo identity
+        (<code className="text-slate-400">github_full_name</code>) — InfraGraph does not copy source into a product area.
+        The worker clones/fetches an ephemeral mirror cache under <code className="text-slate-400">data/mirrors</code>.
         Sync loads <code className="text-slate-400">config/repo-subscriptions.json</code>; toggle updates Postgres
-        (and config when writable). Only subscribed repos are scanned by the worker.
+        (and config when writable). Only subscribed repos are scanned.{' '}
+        <Link to="/scanner" className="text-brand-400 hover:underline">
+          Scanner Monitor
+        </Link>{' '}
+        shows schedules and adhoc/reconcile logs.
       </p>
+
+      <SubscribeRepoModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSubmit={handleCreate}
+        loading={creating}
+        error={createError}
+      />
     </PageShell>
   );
 }

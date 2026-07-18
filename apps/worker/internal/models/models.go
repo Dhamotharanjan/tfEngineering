@@ -152,17 +152,20 @@ type ParseResult struct {
 }
 
 type ImpactResult struct {
-	ChangePlanID   string        `json:"change_plan_id"`
-	UpstreamModule string        `json:"upstream_module"`
-	FromVersion    string        `json:"from_version"`
-	ToVersion      string        `json:"to_version"`
-	RolloutPlans   []RolloutPlan `json:"rollout_plans"`
-	AffectedRepos  []string      `json:"affected_repos"`
+	ChangePlanID   string         `json:"change_plan_id"`
+	UpstreamModule string         `json:"upstream_module"`
+	FromVersion    string         `json:"from_version"`
+	ToVersion      string         `json:"to_version"`
+	RolloutPlans   []RolloutPlan  `json:"rollout_plans"`
+	AffectedRepos  []string       `json:"affected_repos"`
+	ImpactReport   map[string]any `json:"impact_report,omitempty"`
+	Breaking       bool           `json:"breaking"`
 }
 
 type RolloutPlan struct {
 	ID               string           `json:"id"`
 	DownstreamRepo   string           `json:"downstream_repo"`
+	DownstreamRepoID string           `json:"downstream_repo_id,omitempty"`
 	PinnedVersion    string           `json:"pinned_version"`
 	TargetVersion    string           `json:"target_version"`
 	Strategy         string           `json:"strategy"`
@@ -171,5 +174,14 @@ type RolloutPlan struct {
 	Phases           []map[string]any `json:"phases"`
 	BreakingChanges  []map[string]any `json:"breaking_changes"`
 	MockOutputsDrift []map[string]any `json:"mock_outputs_drift"`
+	Locations        []map[string]any `json:"locations,omitempty"`
 	Rollback         string           `json:"rollback"`
+}
+
+type ModuleLocation struct {
+	StackFile    string
+	ModuleSource string
+	Ref          string
+	File         string
+	Line         int
 }

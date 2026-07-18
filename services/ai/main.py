@@ -9,6 +9,14 @@ from fastapi import FastAPI, BackgroundTasks
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
 
 from release_analyze import analyze_release_change, chat_release_compare
+from infra_interactions import (
+    collection_stats,
+    derive_pattern,
+    ensure_interactions_collection,
+    ingest_interactions,
+    reset_infra_collections,
+    seed_canonical_patterns,
+)
 
 app = FastAPI(title="InfraGraph AI Service", version="1.0.0")
 
@@ -52,7 +60,21 @@ def embed_text(text: str) -> list[float]:
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "ai", "collection": COLLECTION}
+    milvus_ok = False
+    infra_stats = {}
+    try:
+        connect_milvus()
+        milvus_ok = True
+        infra_stats = collection_stats().get("collections", {})
+    except Exception as exc:
+        infra_stats = {"error": str(exc)}
+    return {
+        "status": "ok",
+        "service": "ai",
+        "collection": COLLECTION,
+        "milvus": "ok" if milvus_ok else "unavailable",
+        "infra_collections": infra_stats,
+    }
 
 
 @app.post("/admin/reset")
@@ -61,7 +83,8 @@ def admin_reset():
     if utility.has_collection(COLLECTION):
         utility.drop_collection(COLLECTION)
     ensure_collection()
-    return {"status": "cleared", "collection": COLLECTION}
+    infra = reset_infra_collections()
+    return {"status": "cleared", "collection": COLLECTION, "infra": infra}
 
 
 @app.post("/embed/chunk")
@@ -120,7 +143,6 @@ def similar_patterns(repo_id: str, top_k: int = 5):
         results = col.query(expr=expr, output_fields=["id", "repo_id", "chunk_type"], limit=1)
         if not results:
             return {"repo_id": repo_id, "neighbors": []}
-        # Search using first stored vector for repo
         return {"repo_id": repo_id, "neighbors": results, "status": "ok"}
     except Exception as exc:
         return {"repo_id": repo_id, "neighbors": [], "status": "error", "error": str(exc)}
@@ -128,7 +150,7 @@ def similar_patterns(repo_id: str, top_k: int = 5):
 
 @app.post("/ingest/parse-result")
 async def ingest_parse_result(body: dict[str, Any]):
-    """Stage 6 async: embed stack profiles from parse results."""
+    """Stage 6 async: embed stack profiles from parse results + interaction edges when present."""
     repo_id = body.get("repo_id", "")
     resources = body.get("resources", [])
     stacks = body.get("stacks", [])
@@ -139,7 +161,66 @@ async def ingest_parse_result(body: dict[str, Any]):
     for r in resources[:20]:
         content = json.dumps({"type": r.get("type"), "name": r.get("name"), "attrs": r.get("attributes", {})})
         chunks.append(embed_chunk({"repo_id": repo_id, "chunk_type": "resource_pattern", "content": content}))
-    return {"repo_id": repo_id, "chunks_embedded": len(chunks)}
+
+    interactions = body.get("interactions") or []
+    interaction_result = None
+    if interactions:
+        try:
+            interaction_result = ingest_interactions(interactions)
+        except Exception as exc:
+            interaction_result = {"status": "error", "error": str(exc)}
+
+    return {
+        "repo_id": repo_id,
+        "chunks_embedded": len(chunks),
+        "interactions": interaction_result,
+    }
+
+
+@app.get("/infra/milvus/status")
+def infra_milvus_status():
+    try:
+        return {"status": "ok", **collection_stats()}
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@app.post("/infra/interactions/ingest")
+def infra_interactions_ingest(body: dict[str, Any]):
+    """Upsert exhaustive interaction signatures into Milvus infra_interactions."""
+    interactions = body.get("interactions") or []
+    if not isinstance(interactions, list):
+        return {"status": "error", "error": "interactions must be a list"}
+    try:
+        ensure_interactions_collection()
+        result = ingest_interactions(interactions)
+        try:
+            seed_canonical_patterns()
+        except Exception:
+            pass
+        return result
+    except Exception as exc:
+        return {"status": "error", "error": str(exc), "count": 0}
+
+
+@app.post("/infra/patterns/seed")
+def infra_patterns_seed():
+    try:
+        return seed_canonical_patterns()
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+@app.post("/infra/patterns/derive")
+def infra_patterns_derive(body: dict[str, Any]):
+    """Hybrid pattern derivation from interaction set (rules + vectors)."""
+    interactions = body.get("interactions") or []
+    family = body.get("family")
+    hint = body.get("pattern_hint") or body.get("pattern_id")
+    try:
+        return derive_pattern(interactions, family=family, pattern_hint=hint)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 @app.post("/release-compare/analyze")

@@ -15,6 +15,10 @@ import { AdminController } from './admin/admin.controller';
 import { AdminService } from './admin/admin.service';
 import { ReleaseCompareController } from './release-compare/release-compare.controller';
 import { ReleaseCompareService } from './release-compare/release-compare.service';
+import { SchedulerService } from './scheduler/scheduler.service';
+import { SchedulerController } from './scheduler/scheduler.controller';
+import { ScannerController } from './scanner/scanner.controller';
+import { ImpactController } from './impact/impact.controller';
 
 @Module({
   imports: [],
@@ -29,7 +33,18 @@ import { ReleaseCompareService } from './release-compare/release-compare.service
     AdminController,
     GraphController,
     ReleaseCompareController,
+    SchedulerController,
+    ScannerController,
+    ImpactController,
   ],
-  providers: [DbService, QueueService, GraphService, PatternService, AdminService, ReleaseCompareService],
+  providers: [
+    DbService,
+    QueueService,
+    GraphService,
+    PatternService,
+    AdminService,
+    ReleaseCompareService,
+    SchedulerService,
+  ],
 })
 export class AppModule {}

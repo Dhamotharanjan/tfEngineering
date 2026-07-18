@@ -3,12 +3,15 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/acme/infragraph/worker/internal/models"
@@ -60,6 +63,36 @@ func (p *Postgres) SyncSubscriptions(ctx context.Context, repos []models.RepoSub
 	return nil
 }
 
+func (p *Postgres) GetSubscribedRepo(ctx context.Context, repoID string) (*models.RepoSubscription, error) {
+	row := p.Pool.QueryRow(ctx, `
+		SELECT id, github_full_name, role, subscribed, entitlement_tier, COALESCE(scan_profile,''), COALESCE(local_path,''),
+		       COALESCE(appsvn,''), COALESCE(application_label,''),
+		       COALESCE(triggers_enabled, '{}'::jsonb), COALESCE(module_sources_watched, '[]'::jsonb),
+		       COALESCE(compliance_scope, '[]'::jsonb), COALESCE(contacts, '{}'::jsonb)
+		FROM subscriptions WHERE id=$1 AND subscribed=true
+	`, repoID)
+	var sub models.RepoSubscription
+	var triggers, watched, compliance, contacts []byte
+	err := row.Scan(
+		&sub.ID, &sub.GithubFullName, &sub.Role, &sub.Subscribed, &sub.EntitlementTier, &sub.ScanProfile, &sub.LocalPath,
+		&sub.Appsvn, &sub.ApplicationLabel, &triggers, &watched, &compliance, &contacts,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	_ = json.Unmarshal(triggers, &sub.TriggersEnabled)
+	_ = json.Unmarshal(watched, &sub.ModuleSourcesWatched)
+	_ = json.Unmarshal(compliance, &sub.ComplianceScope)
+	_ = json.Unmarshal(contacts, &sub.Contacts)
+	if sub.TriggersEnabled == nil {
+		sub.TriggersEnabled = map[string]bool{}
+	}
+	return &sub, nil
+}
+
 func (p *Postgres) CreateScanJob(ctx context.Context, jobType, priority, repoID string, payload map[string]any) (string, error) {
 	id := uuid.New().String()
 	pb, _ := json.Marshal(payload)
@@ -91,13 +124,129 @@ func (p *Postgres) UpdateSubscriptionScan(ctx context.Context, repoID, status st
 	return err
 }
 
-func (p *Postgres) UpsertChangePlan(ctx context.Context, id, module, from, to string, phases []map[string]any) error {
-	pb, _ := json.Marshal(phases)
+// UpdateSubscriptionScanWatermark records SHA watermark + scan mode stats after a successful scan.
+func (p *Postgres) UpdateSubscriptionScanWatermark(ctx context.Context, repoID, status string, nodeCount int, sha, ref, mode string, stats map[string]any) error {
+	sb, _ := json.Marshal(stats)
+	fullAt := "last_full_scan_at"
+	incAt := "last_incremental_at"
+	q := `
+		UPDATE subscriptions SET
+			last_scan_at=now(), last_scan_status=$2, graph_node_count=$3, updated_at=now(),
+			last_scanned_sha=COALESCE(NULLIF($4,''), last_scanned_sha),
+			last_scanned_ref=COALESCE(NULLIF($5,''), last_scanned_ref),
+			scan_stats=$6::jsonb,
+			last_full_scan_at = CASE WHEN $7 = 'full' OR $7 = 'reconcile' THEN now() ELSE last_full_scan_at END,
+			last_incremental_at = CASE WHEN $7 = 'incremental' THEN now() ELSE last_incremental_at END
+		WHERE id=$1`
+	_, err := p.Pool.Exec(ctx, q, repoID, status, nodeCount, sha, ref, sb, mode)
+	_ = fullAt
+	_ = incAt
+	return err
+}
+
+func (p *Postgres) GetLastScannedSHA(ctx context.Context, repoID string) (string, error) {
+	var sha *string
+	err := p.Pool.QueryRow(ctx, `SELECT last_scanned_sha FROM subscriptions WHERE id=$1`, repoID).Scan(&sha)
+	if err != nil {
+		return "", err
+	}
+	if sha == nil {
+		return "", nil
+	}
+	return *sha, nil
+}
+
+func (p *Postgres) RecordScanRunDetails(ctx context.Context, jobID, repoID, stage, status string, nodes, edges int, artifact string, details map[string]any) error {
+	db, _ := json.Marshal(details)
 	_, err := p.Pool.Exec(ctx, `
-		INSERT INTO change_plans (id, upstream_module, from_version, to_version, status, phases, rollback, updated_at)
-		VALUES ($1,$2,$3,$4,'pending_approval',$5,$6,now())
-		ON CONFLICT (id) DO UPDATE SET phases=EXCLUDED.phases, to_version=EXCLUDED.to_version, updated_at=now()
-	`, id, module, from, to, pb, fmt.Sprintf("Revert to %s", from))
+		INSERT INTO scan_runs (job_id, repo_id, stage, status, nodes_written, edges_written, artifact_path, details)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)
+	`, jobID, repoID, stage, status, nodes, edges, artifact, db)
+	return err
+}
+
+func (p *Postgres) InsertScanMetrics(ctx context.Context, repoID, jobType, mode, fromSHA, toSHA string, files, parseMs, graphMs, coalesce int) error {
+	_, err := p.Pool.Exec(ctx, `
+		INSERT INTO scan_metrics (repo_id, job_type, mode, from_sha, to_sha, files_touched, parse_ms, graph_ms, coalesce_count)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	`, repoID, jobType, mode, fromSHA, toSHA, files, parseMs, graphMs, coalesce)
+	return err
+}
+
+func (p *Postgres) TryRecordWebhookDelivery(ctx context.Context, deliveryID, provider, eventType, repoID string, summary map[string]any) (bool, error) {
+	if deliveryID == "" {
+		return true, nil // no id → always accept
+	}
+	sb, _ := json.Marshal(summary)
+	tag, err := p.Pool.Exec(ctx, `
+		INSERT INTO webhook_deliveries (delivery_id, provider, event_type, repo_id, payload_summary)
+		VALUES ($1,$2,$3,$4,$5::jsonb)
+		ON CONFLICT (delivery_id) DO NOTHING
+	`, deliveryID, provider, eventType, repoID, sb)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+func (p *Postgres) ResolveSubscriptionID(ctx context.Context, githubNameOrID string) (string, error) {
+	var id string
+	err := p.Pool.QueryRow(ctx, `
+		SELECT id FROM subscriptions
+		WHERE id=$1 OR github_full_name=$1 OR github_full_name LIKE '%' || $1
+		OR split_part(github_full_name, '/', 2) = $1
+		LIMIT 1
+	`, githubNameOrID).Scan(&id)
+	if err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+func (p *Postgres) ListSubscribedRepoIDs(ctx context.Context) ([]string, error) {
+	rows, err := p.Pool.Query(ctx, `SELECT id FROM subscriptions WHERE subscribed=true`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+func (p *Postgres) UpsertChangePlan(ctx context.Context, id, module, from, to string, phases []map[string]any) error {
+	return p.UpsertChangePlanWithReport(ctx, id, module, from, to, phases, nil)
+}
+
+func (p *Postgres) UpsertChangePlanWithReport(ctx context.Context, id, module, from, to string, phases []map[string]any, impactReport map[string]any) error {
+	pb, _ := json.Marshal(phases)
+	ir, _ := json.Marshal(impactReport)
+	if impactReport == nil {
+		ir = []byte("{}")
+	}
+	_, err := p.Pool.Exec(ctx, `
+		INSERT INTO change_plans (id, upstream_module, from_version, to_version, status, phases, rollback, impact_report, updated_at)
+		VALUES ($1,$2,$3,$4,'pending_approval',$5,$6,$7::jsonb,now())
+		ON CONFLICT (id) DO UPDATE SET
+		  phases=EXCLUDED.phases,
+		  to_version=EXCLUDED.to_version,
+		  impact_report=EXCLUDED.impact_report,
+		  updated_at=now()
+	`, id, module, from, to, pb, fmt.Sprintf("Revert to %s", from), string(ir))
+	return err
+}
+
+func (p *Postgres) UpdateChangePlanImpactReport(ctx context.Context, id string, impactReport map[string]any) error {
+	ir, _ := json.Marshal(impactReport)
+	_, err := p.Pool.Exec(ctx, `
+		UPDATE change_plans SET impact_report=$2::jsonb, updated_at=now() WHERE id=$1
+	`, id, string(ir))
 	return err
 }
 
@@ -105,13 +254,68 @@ func (p *Postgres) InsertRolloutPlan(ctx context.Context, changePlanID string, p
 	phases, _ := json.Marshal(plan.Phases)
 	breaking, _ := json.Marshal(plan.BreakingChanges)
 	drift, _ := json.Marshal(plan.MockOutputsDrift)
+	locations, _ := json.Marshal(plan.Locations)
+	if plan.Locations == nil {
+		locations = []byte("[]")
+	}
 	_, err := p.Pool.Exec(ctx, `
-		INSERT INTO rollout_plans (id, change_plan_id, downstream_repo, pinned_version, target_version, strategy, strategy_reason, version_gap, phases, breaking_changes, mock_outputs_drift, rollback, status)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending')
+		INSERT INTO rollout_plans (id, change_plan_id, downstream_repo, downstream_repo_id, pinned_version, target_version, strategy, strategy_reason, version_gap, phases, breaking_changes, mock_outputs_drift, locations, rollback, status)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14,'pending')
 		ON CONFLICT (id) DO NOTHING
-	`, plan.ID, changePlanID, plan.DownstreamRepo, plan.PinnedVersion, plan.TargetVersion,
-		plan.Strategy, plan.StrategyReason, plan.VersionGap, phases, breaking, drift, plan.Rollback)
+	`, plan.ID, changePlanID, plan.DownstreamRepo, nullIfEmpty(plan.DownstreamRepoID), plan.PinnedVersion, plan.TargetVersion,
+		plan.Strategy, plan.StrategyReason, plan.VersionGap, phases, breaking, drift, string(locations), plan.Rollback)
 	return err
+}
+
+func nullIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+// scopedEntityID makes primary keys unique across examples/modules that reuse the same TF address.
+func scopedEntityID(repoID, file, address string) string {
+	file = strings.ReplaceAll(filepath.ToSlash(strings.TrimSpace(file)), ":", "_")
+	if file == "" {
+		file = "_"
+	}
+	return fmt.Sprintf("%s:%s:%s", repoID, file, address)
+}
+
+// ListModuleLocations returns concrete file/dir hits for a consumer referencing an upstream module.
+func (p *Postgres) ListModuleLocations(ctx context.Context, repoID string, sourceHints []string) []models.ModuleLocation {
+	rows, err := p.Pool.Query(ctx, `
+		SELECT COALESCE(stack_file,''), module_source, COALESCE(ref,''), COALESCE(file,''), COALESCE(line,0)
+		FROM module_references WHERE repo_id=$1 ORDER BY stack_file, file, line
+	`, repoID)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	var matched []models.ModuleLocation
+	var all []models.ModuleLocation
+	for rows.Next() {
+		var loc models.ModuleLocation
+		if err := rows.Scan(&loc.StackFile, &loc.ModuleSource, &loc.Ref, &loc.File, &loc.Line); err != nil {
+			continue
+		}
+		all = append(all, loc)
+		src := strings.ToLower(loc.ModuleSource)
+		for _, h := range sourceHints {
+			if h != "" && strings.Contains(src, strings.ToLower(h)) {
+				matched = append(matched, loc)
+				break
+			}
+		}
+	}
+	if len(matched) > 0 {
+		return matched
+	}
+	if len(all) > 20 {
+		return all[:20]
+	}
+	return all
 }
 
 func (p *Postgres) InsertEOLRisk(ctx context.Context, repoID string, signal map[string]any) error {
@@ -357,8 +561,8 @@ func (p *Postgres) PersistParseResult(ctx context.Context, scanRunID string, rep
 
 	for _, res := range parsed.Resources {
 		addr := fmt.Sprintf("%s.%s", res.Type, res.Name)
-		resID := fmt.Sprintf("%s:%s", repoID, addr)
-		// Persist nested blocks (ingress/egress, etc.) under _nested_blocks for auditor architecture.
+		// Include file so examples/modules with the same type.name don't collide (e.g. public VPC module).
+		resID := scopedEntityID(repoID, res.File, addr)
 		attrMap := map[string]any{}
 		for k, v := range res.Attributes {
 			attrMap[k] = v
@@ -371,6 +575,10 @@ func (p *Postgres) PersistParseResult(ctx context.Context, scanRunID string, rep
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO resources (id, repo_id, scan_run_id, address, type, name, file, line, service_id, appsvn, attributes)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			ON CONFLICT (id) DO UPDATE SET
+			  scan_run_id=EXCLUDED.scan_run_id, address=EXCLUDED.address, type=EXCLUDED.type, name=EXCLUDED.name,
+			  file=EXCLUDED.file, line=EXCLUDED.line, service_id=EXCLUDED.service_id, appsvn=EXCLUDED.appsvn,
+			  attributes=EXCLUDED.attributes
 		`, resID, repoID, scanRunID, addr, res.Type, res.Name, res.File, res.Line, res.ServiceID, nullIfEmpty(appsvn), attrs); err != nil {
 			return err
 		}
@@ -403,48 +611,63 @@ func (p *Postgres) PersistParseResult(ctx context.Context, scanRunID string, rep
 
 	for _, ds := range parsed.DataSources {
 		addr := fmt.Sprintf("data.%s.%s", ds.Type, ds.Name)
-		dsID := fmt.Sprintf("%s:%s", repoID, addr)
+		dsID := scopedEntityID(repoID, ds.File, addr)
 		attrs, _ := json.Marshal(ds.Attributes)
 		nested, _ := json.Marshal(ds.NestedBlocks)
 		refs, _ := json.Marshal(ds.References)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO data_sources (id, repo_id, scan_run_id, address, type, name, file, line, attributes, nested_blocks, references_json)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+			ON CONFLICT (id) DO UPDATE SET
+			  scan_run_id=EXCLUDED.scan_run_id, address=EXCLUDED.address, type=EXCLUDED.type, name=EXCLUDED.name,
+			  file=EXCLUDED.file, line=EXCLUDED.line, attributes=EXCLUDED.attributes,
+			  nested_blocks=EXCLUDED.nested_blocks, references_json=EXCLUDED.references_json
 		`, dsID, repoID, scanRunID, addr, ds.Type, ds.Name, ds.File, ds.Line, attrs, nested, refs); err != nil {
 			return err
 		}
 	}
 
 	for _, v := range parsed.Variables {
-		vID := fmt.Sprintf("%s:var.%s", repoID, v.Name)
+		vID := scopedEntityID(repoID, v.File, "var."+v.Name)
 		def, _ := json.Marshal(v.DefaultJSON)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO variables (id, repo_id, scan_run_id, name, var_type, default_json, sensitive, description, file, line)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+			ON CONFLICT (id) DO UPDATE SET
+			  scan_run_id=EXCLUDED.scan_run_id, name=EXCLUDED.name, var_type=EXCLUDED.var_type,
+			  default_json=EXCLUDED.default_json, sensitive=EXCLUDED.sensitive, description=EXCLUDED.description,
+			  file=EXCLUDED.file, line=EXCLUDED.line
 		`, vID, repoID, scanRunID, v.Name, v.VarType, def, v.Sensitive, v.Description, v.File, v.Line); err != nil {
 			return err
 		}
 	}
 
 	for _, o := range parsed.Outputs {
-		oID := fmt.Sprintf("%s:output.%s", repoID, o.Name)
+		oID := scopedEntityID(repoID, o.File, "output."+o.Name)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO outputs (id, repo_id, scan_run_id, name, sensitive, file, line, value_ref)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			ON CONFLICT (id) DO UPDATE SET
+			  scan_run_id=EXCLUDED.scan_run_id, name=EXCLUDED.name, sensitive=EXCLUDED.sensitive,
+			  file=EXCLUDED.file, line=EXCLUDED.line, value_ref=EXCLUDED.value_ref
 		`, oID, repoID, scanRunID, o.Name, o.Sensitive, o.File, o.Line, o.ValueRef); err != nil {
 			return err
 		}
 	}
 
 	for _, p := range parsed.Providers {
-		pID := fmt.Sprintf("%s:provider.%s", repoID, p.ProviderType)
+		label := fmt.Sprintf("provider.%s", p.ProviderType)
 		if p.Alias != "" {
-			pID = fmt.Sprintf("%s:provider.%s.%s", repoID, p.ProviderType, p.Alias)
+			label = fmt.Sprintf("provider.%s.%s", p.ProviderType, p.Alias)
 		}
+		pID := scopedEntityID(repoID, p.File, label)
 		attrs, _ := json.Marshal(p.Attributes)
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO provider_configs (id, repo_id, scan_run_id, provider_type, alias, attributes, file, line)
 			VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+			ON CONFLICT (id) DO UPDATE SET
+			  scan_run_id=EXCLUDED.scan_run_id, provider_type=EXCLUDED.provider_type, alias=EXCLUDED.alias,
+			  attributes=EXCLUDED.attributes, file=EXCLUDED.file, line=EXCLUDED.line
 		`, pID, repoID, scanRunID, p.ProviderType, p.Alias, attrs, p.File, p.Line); err != nil {
 			return err
 		}
@@ -519,7 +742,9 @@ func (p *Postgres) PersistParseResult(ctx context.Context, scanRunID string, rep
 		}
 	}
 
-	_, err = tx.Exec(ctx, `UPDATE scan_runs SET status='completed' WHERE id=$1`, scanRunID)
+	_, err = tx.Exec(ctx, `
+		UPDATE scan_runs SET status='completed', nodes_written=$2, edges_written=$3 WHERE id=$1
+	`, scanRunID, len(parsed.Resources), len(parsed.Modules))
 	if err != nil {
 		return err
 	}
@@ -832,13 +1057,6 @@ func (p *Postgres) ListPatternAlerts(ctx context.Context) ([]map[string]any, err
 		})
 	}
 	return out, rows.Err()
-}
-
-func nullIfEmpty(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
 }
 
 // resolveResourceAppsvn prefers Terraform tags.APPSVN / tags.Appsvn, else repo-level appsvn.

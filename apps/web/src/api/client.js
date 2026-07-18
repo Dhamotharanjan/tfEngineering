@@ -25,8 +25,22 @@ export const api = {
   health: () => fetchJSON('/health'),
   dashboardStats: () => fetchJSON('/dashboard/stats'),
   subscriptions: () => fetchJSON('/subscriptions'),
+  createSubscription: (body) =>
+    fetchJSON('/subscriptions', { method: 'POST', body: JSON.stringify(body) }),
   syncSubscriptions: () => fetchJSON('/subscriptions/sync', { method: 'POST' }),
   triggerScan: (repoId) => fetchJSON(`/subscriptions/${repoId}/scan`, { method: 'POST' }),
+  scannerOverview: () => fetchJSON('/scanner/overview'),
+  scannerJobs: (limit = 40) => fetchJSON(`/scanner/jobs?limit=${limit}`),
+  scannerJobRuns: (id) => fetchJSON(`/scanner/jobs/${encodeURIComponent(id)}/runs`),
+  scannerReconcile: () => fetchJSON('/scanner/reconcile', { method: 'POST' }),
+  impactReportLatest: (upstream) =>
+    fetchJSON(`/impact/reports/latest${upstream ? `?upstream=${encodeURIComponent(upstream)}` : ''}`),
+  impactReport: (id) => fetchJSON(`/impact/reports/${encodeURIComponent(id)}`),
+  impactReportChat: (id, body) =>
+    fetchJSON(`/impact/reports/${encodeURIComponent(id)}/chat`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   blastRadius: (moduleId) => fetchJSON(`/blast-radius/${moduleId}`),
   blastRadiusGraph: (moduleId, params = {}) => {
     const qs = new URLSearchParams();
@@ -71,6 +85,12 @@ export const api = {
   },
   patternArchitecture: (patternId) =>
     fetchJSON(`/graph/patterns/${encodeURIComponent(patternId)}/architecture`),
+  syncPatternInteractions: (body = {}) =>
+    fetchJSON('/graph/patterns/interactions/sync', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  patternMilvusStatus: () => fetchJSON('/graph/patterns/milvus/status'),
   stampPattern: (patternId, body) =>
     fetchJSON(`/graph/patterns/${encodeURIComponent(patternId)}/stamp`, {
       method: 'POST',

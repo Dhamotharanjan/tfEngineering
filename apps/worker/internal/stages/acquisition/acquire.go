@@ -16,6 +16,9 @@ type Result struct {
 	ArtifactPath string `json:"artifact_path"`
 	FileCount    int    `json:"file_count"`
 	Ref          string `json:"ref"`
+	HeadSHA      string `json:"head_sha,omitempty"`
+	SourceDir    string `json:"source_dir,omitempty"` // git working tree or local root for diffs
+	IsGit        bool   `json:"is_git"`
 }
 
 // Stage 2: Source acquisition — copy local repo or use existing path.

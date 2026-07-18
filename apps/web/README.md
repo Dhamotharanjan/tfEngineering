@@ -25,6 +25,7 @@ npm run dev
 | Screen | Route | Purpose |
 |--------|-------|---------|
 | Dashboard | `/` | Executive overview |
+| Why InfraGraph | `/pitch` | Marketing pitch — four core ideas + deep-links to live screens |
 | Blast Radius | `/impact/modules-vpc` | Dependency graph |
 | Change Plan | `/plans/change` | Phased rollout |
 | Rollout Plan | `/plans/rollout` | Canary strategy per downstream |

@@ -126,6 +126,7 @@ services:
       - ./registry:/app/registry:ro
       - ./mvp_demo:/app/mvp_demo:ro
       - ./data/artifacts:/app/data/artifacts
+      - ./data/mirrors:/app/data/mirrors
     depends_on:
       - neo4j
       - postgres

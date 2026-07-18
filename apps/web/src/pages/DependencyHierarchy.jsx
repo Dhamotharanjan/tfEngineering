@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ChevronDown,
   ChevronRight,
@@ -9,6 +9,7 @@ import {
   Package,
   Wifi,
   WifiOff,
+  AlertTriangle,
 } from 'lucide-react';
 import Header from '../components/Header';
 import { PageShell, SectionTitle } from '../components/ui';
@@ -56,7 +57,15 @@ function roleIcon(role) {
   return Package;
 }
 
-function TreeNode({ node, depth = 0, expanded, onToggle, selectedId, onSelect }) {
+function TreeNode({
+  node,
+  depth = 0,
+  expanded,
+  onToggle,
+  selectedId,
+  onSelect,
+  impactByRepo,
+}) {
   const hasChildren = (node.children || []).length > 0;
   const isOpen = expanded.has(node.id);
   const isSelected = selectedId === node.id;
@@ -66,12 +75,18 @@ function TreeNode({ node, depth = 0, expanded, onToggle, selectedId, onSelect })
     detail: node.role,
     id: node.id,
   });
+  const impact = impactByRepo?.[node.id] || impactByRepo?.[node.name];
+  const isImpacted = Boolean(impact);
 
   return (
     <div className="select-none">
       <div
         className={`group flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition ${
-          isSelected ? 'bg-brand-500/15 ring-1 ring-brand-500/40' : 'hover:bg-white/5'
+          isImpacted
+            ? 'bg-rose-500/15 ring-1 ring-rose-500/50'
+            : isSelected
+              ? 'bg-brand-500/15 ring-1 ring-brand-500/40'
+              : 'hover:bg-white/5'
         }`}
         style={{ paddingLeft: 8 + depth * 18 }}
       >
@@ -111,7 +126,16 @@ function TreeNode({ node, depth = 0, expanded, onToggle, selectedId, onSelect })
               {node.id}
               {node.via ? ` · via ${node.via}` : ''}
             </span>
+            {isImpacted && (
+              <span className="mt-0.5 block truncate font-mono text-[10px] text-rose-300">
+                {(impact.locations || [])
+                  .slice(0, 2)
+                  .map((l) => `${l.directory || ''}/${l.file || l.stack_file || ''}`.replace(/\/+/g, '/'))
+                  .join(' · ') || 'breaking impact'}
+              </span>
+            )}
           </span>
+          {isImpacted && <span className="badge-critical shrink-0 text-[9px]">breaking</span>}
           <span
             className={`badge-${node.role === 'module_source' ? 'info' : 'neutral'} shrink-0 text-[9px]`}
           >
@@ -132,6 +156,7 @@ function TreeNode({ node, depth = 0, expanded, onToggle, selectedId, onSelect })
               onToggle={onToggle}
               selectedId={selectedId}
               onSelect={onSelect}
+              impactByRepo={impactByRepo}
             />
           ))}
         </div>
@@ -214,6 +239,9 @@ function buildHierarchy(subscriptions, depsByRepo) {
 
 export default function DependencyHierarchy() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const impactParam = searchParams.get('impact');
+
   const [subscriptions, setSubscriptions] = useState([]);
   const [depsByRepo, setDepsByRepo] = useState({});
   const [live, setLive] = useState(false);
@@ -221,6 +249,11 @@ export default function DependencyHierarchy() {
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
   const [expanded, setExpanded] = useState(new Set());
+  const [impactReport, setImpactReport] = useState(null);
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatLog, setChatLog] = useState([]);
+  const [showChat, setShowChat] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -261,6 +294,36 @@ export default function DependencyHierarchy() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = impactParam
+          ? await api.impactReport(impactParam)
+          : await api.impactReportLatest();
+        if (!cancelled && data?.id && (data.breaking || impactParam)) {
+          setImpactReport(data);
+        } else if (!cancelled && !impactParam) {
+          setImpactReport(null);
+        }
+      } catch {
+        if (!cancelled) setImpactReport(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [impactParam]);
+
+  const impactByRepo = useMemo(() => {
+    const map = {};
+    for (const d of impactReport?.downstream || []) {
+      if (d.downstream_repo_id) map[d.downstream_repo_id] = d;
+      if (d.downstream_repo) map[d.downstream_repo] = d;
+    }
+    return map;
+  }, [impactReport]);
+
   const tree = useMemo(() => {
     if (!live || !subscriptions.length) return MOCK_TREE;
     return buildHierarchy(subscriptions, depsByRepo);
@@ -296,6 +359,26 @@ export default function DependencyHierarchy() {
   };
 
   const selectedDeps = selected ? depsByRepo[selected.id] : null;
+  const selectedImpact = selected
+    ? impactByRepo[selected.id] || impactByRepo[selected.name]
+    : null;
+
+  async function sendChat(e) {
+    e.preventDefault();
+    if (!impactReport?.id || !chatInput.trim()) return;
+    const q = chatInput.trim();
+    setChatInput('');
+    setChatLog((prev) => [...prev, { role: 'user', content: q }]);
+    setChatBusy(true);
+    try {
+      const res = await api.impactReportChat(impactReport.id, { message: q });
+      setChatLog((prev) => [...prev, { role: 'assistant', content: res.content || JSON.stringify(res) }]);
+    } catch (err) {
+      setChatLog((prev) => [...prev, { role: 'assistant', content: err.message || 'Chat failed' }]);
+    } finally {
+      setChatBusy(false);
+    }
+  }
 
   return (
     <PageShell
@@ -323,6 +406,58 @@ export default function DependencyHierarchy() {
         />
       }
     >
+      {impactReport?.breaking && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-3">
+          <AlertTriangle className="h-4 w-4 text-rose-300" />
+          <div className="min-w-0 flex-1 text-sm text-rose-100">
+            Breaking change detected:{' '}
+            <span className="font-mono text-xs">
+              {impactReport.upstream_module} {impactReport.from_version} → {impactReport.to_version}
+            </span>
+            . Affected nodes highlighted with file/directory paths.
+          </div>
+          <button type="button" className="btn-secondary text-xs" onClick={() => setShowChat((v) => !v)}>
+            {showChat ? 'Hide AI chat' : 'Ask AI about impact'}
+          </button>
+          <Link to={`/releases/${encodeURIComponent(impactReport.to_version || 'v3.0.0')}`} className="btn-primary text-xs">
+            Full report
+          </Link>
+        </div>
+      )}
+
+      {showChat && impactReport?.id && (
+        <div className="card mb-4 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-white">Impact AI chat</h4>
+          <p className="mb-2 text-[10px] text-slate-500">
+            Email notification coming soon — ask how to implement or what breaks.
+          </p>
+          <div className="mb-2 max-h-40 space-y-2 overflow-y-auto">
+            {chatLog.map((m, i) => (
+              <div
+                key={i}
+                className={`rounded-md px-3 py-2 text-xs ${
+                  m.role === 'user' ? 'bg-brand-500/10 text-brand-100' : 'bg-white/5 text-slate-300'
+                }`}
+              >
+                <div className="whitespace-pre-wrap">{m.content}</div>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={sendChat} className="flex gap-2">
+            <input
+              className="input flex-1 text-sm"
+              placeholder="How should we roll this out?"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              disabled={chatBusy}
+            />
+            <button type="submit" className="btn-primary text-xs" disabled={chatBusy || !chatInput.trim()}>
+              Ask
+            </button>
+          </form>
+        </div>
+      )}
+
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <button type="button" className="btn-secondary text-xs" onClick={expandAll}>
           Expand all
@@ -358,6 +493,7 @@ export default function DependencyHierarchy() {
                   onToggle={onToggle}
                   selectedId={selected?.id}
                   onSelect={openBlastRadius}
+                  impactByRepo={impactByRepo}
                 />
               ))
             )}
@@ -382,6 +518,25 @@ export default function DependencyHierarchy() {
                   <div className="text-xs text-slate-500">Role</div>
                   <div className="text-sm text-slate-200">{selected.role}</div>
                 </div>
+                {selectedImpact && (
+                  <div>
+                    <div className="mb-1.5 text-xs text-rose-300">Breaking impact locations</div>
+                    <ul className="space-y-1.5">
+                      {(selectedImpact.locations || []).map((loc, i) => (
+                        <li key={i} className="rounded-md bg-rose-500/10 px-2 py-1.5 font-mono text-[10px] text-rose-100">
+                          {loc.directory || '—'} / {loc.file || loc.stack_file || '—'}
+                          {loc.line ? `:${loc.line}` : ''}
+                        </li>
+                      ))}
+                      {(selectedImpact.breaking_changes || []).slice(0, 5).map((b, i) => (
+                        <li key={`b-${i}`} className="text-[10px] text-rose-200">
+                          {b.type}
+                          {b.name ? `: ${b.name}` : ''} — {b.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div>
                   <div className="mb-1.5 text-xs text-slate-500">Module references</div>
                   <ul className="space-y-1.5">

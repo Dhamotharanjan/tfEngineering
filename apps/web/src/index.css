@@ -8,6 +8,120 @@
   }
 }
 
+/* —— Pitch / marketing light chrome (?pitch=1) —— */
+html[data-pitch='1'] body,
+body.pitch-light {
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-pitch='1'] .pitch-shell,
+body.pitch-light .pitch-shell {
+  background: #ffffff;
+}
+
+html[data-pitch='1'] aside,
+body.pitch-light aside {
+  background: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html[data-pitch='1'] header,
+body.pitch-light header {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html[data-pitch='1'] header h1,
+body.pitch-light header h1 {
+  color: #0f172a !important;
+}
+
+html[data-pitch='1'] header p,
+body.pitch-light header p {
+  color: #64748b !important;
+}
+
+html[data-pitch='1'] .card,
+body.pitch-light .card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-pitch='1'] .card-header,
+body.pitch-light .card-header {
+  border-color: #e2e8f0 !important;
+}
+
+html[data-pitch='1'] .text-white,
+body.pitch-light .text-white {
+  color: #0f172a !important;
+}
+
+html[data-pitch='1'] .text-slate-100,
+html[data-pitch='1'] .text-slate-200,
+html[data-pitch='1'] .text-slate-300,
+body.pitch-light .text-slate-100,
+body.pitch-light .text-slate-200,
+body.pitch-light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html[data-pitch='1'] .text-brand-300,
+html[data-pitch='1'] .text-brand-400,
+body.pitch-light .text-brand-300,
+body.pitch-light .text-brand-400 {
+  color: #0369a1 !important;
+}
+
+html[data-pitch='1'] .stat-value,
+body.pitch-light .stat-value {
+  color: #0f172a !important;
+}
+
+html[data-pitch='1'] .btn-secondary,
+body.pitch-light .btn-secondary {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html[data-pitch='1'] .nav-link,
+body.pitch-light .nav-link {
+  color: #475569 !important;
+}
+
+html[data-pitch='1'] .nav-link-active,
+body.pitch-light .nav-link-active {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-pitch='1'] .bg-white\/\[0\.02\],
+html[data-pitch='1'] .bg-white\/\[0\.03\],
+html[data-pitch='1'] .bg-white\/5,
+body.pitch-light .bg-white\/\[0\.02\],
+body.pitch-light .bg-white\/\[0\.03\],
+body.pitch-light .bg-white\/5 {
+  background-color: #f8fafc !important;
+}
+
+html[data-pitch='1'] .border-white\/10,
+html[data-pitch='1'] .border-white\/5,
+html[data-pitch='1'] .border-white\/15,
+body.pitch-light .border-white\/10,
+body.pitch-light .border-white\/5,
+body.pitch-light .border-white\/15 {
+  border-color: #e2e8f0 !important;
+}
+
+html[data-pitch='1'] main,
+body.pitch-light main {
+  background: #ffffff !important;
+}
+
 @layer components {
   .card {
     @apply rounded-xl border border-white/10 bg-white/[0.03] shadow-xl shadow-black/20;

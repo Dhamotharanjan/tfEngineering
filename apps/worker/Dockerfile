@@ -16,7 +16,7 @@ RUN CGO_ENABLED=0 go build -o /worker .
 
 FROM alpine:3.19
 WORKDIR /app
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates git
 COPY --from=build /worker /app/worker
 ENV PROJECT_ROOT=/app
 ENV BOOTSTRAP_ON_START=true

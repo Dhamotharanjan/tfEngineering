@@ -361,6 +361,52 @@ ALTER TABLE resources ADD COLUMN IF NOT EXISTS appsvn TEXT;
 CREATE INDEX IF NOT EXISTS idx_subscriptions_appsvn ON subscriptions(appsvn);
 CREATE INDEX IF NOT EXISTS idx_resources_appsvn ON resources(appsvn);
 
+-- IGCS: SHA watermark + clone metadata for world-class incremental scanning.
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_scanned_sha TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_scanned_ref TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS clone_url TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_incremental_at TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_full_scan_at TIMESTAMPTZ;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS scan_stats JSONB NOT NULL DEFAULT '{}';
+
+CREATE INDEX IF NOT EXISTS idx_subscriptions_last_scanned_sha ON subscriptions(last_scanned_sha);
+
+-- Webhook delivery dedupe (GitHub X-GitHub-Delivery).
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+  delivery_id TEXT PRIMARY KEY,
+  provider TEXT NOT NULL DEFAULT 'github',
+  event_type TEXT,
+  repo_id TEXT,
+  accepted BOOLEAN NOT NULL DEFAULT true,
+  payload_summary JSONB NOT NULL DEFAULT '{}',
+  received_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_received ON webhook_deliveries(received_at DESC);
+
+-- Push coalesce / scan lag metrics (lightweight).
+CREATE TABLE IF NOT EXISTS scan_metrics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  repo_id TEXT NOT NULL,
+  job_type TEXT NOT NULL,
+  mode TEXT,
+  from_sha TEXT,
+  to_sha TEXT,
+  files_touched INTEGER DEFAULT 0,
+  parse_ms INTEGER DEFAULT 0,
+  graph_ms INTEGER DEFAULT 0,
+  coalesce_count INTEGER DEFAULT 1,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_scan_metrics_repo ON scan_metrics(repo_id, created_at DESC);
+
+ALTER TABLE change_plans ADD COLUMN IF NOT EXISTS impact_report JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE rollout_plans ADD COLUMN IF NOT EXISTS locations JSONB NOT NULL DEFAULT '[]';
+ALTER TABLE rollout_plans ADD COLUMN IF NOT EXISTS downstream_repo_id TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_change_plans_updated ON change_plans(updated_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_pr_draft_requests_repo ON pr_draft_requests(repo_id);
 CREATE INDEX IF NOT EXISTS idx_pr_draft_requests_status ON pr_draft_requests(status);
 CREATE INDEX IF NOT EXISTS idx_pr_draft_requests_approval ON pr_draft_requests(approval_state);

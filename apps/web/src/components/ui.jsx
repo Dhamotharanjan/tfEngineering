@@ -14,11 +14,11 @@ export function MetricCard({ label, value, sub, variant = 'default' }) {
   );
 }
 
-export function PageShell({ header, children }) {
+export function PageShell({ header, children, contentClassName = '' }) {
   return (
     <>
       {header}
-      <div className="flex-1 overflow-y-auto p-6">{children}</div>
+      <div className={`flex-1 overflow-y-auto p-6 ${contentClassName}`.trim()}>{children}</div>
     </>
   );
 }

@@ -51,6 +51,19 @@ export class GraphController {
     });
   }
 
+  /** Backfill exhaustive interactions → Milvus; hybrid pattern derive status. */
+  @Post('patterns/interactions/sync')
+  async syncPatternInteractions(@Body() body?: { patternId?: string }) {
+    return this.patterns.syncInteractionsToMilvus({
+      patternId: body?.patternId?.trim() || undefined,
+    });
+  }
+
+  @Get('patterns/milvus/status')
+  async patternMilvusStatus() {
+    return this.patterns.milvusStatus();
+  }
+
   @Get('patterns/:patternId/coverage')
   async patternCoverage(@Param('patternId') patternId: string) {
     const detail = await this.patterns.getPatternDetail(patternId);

@@ -34,6 +34,12 @@ export const RESOURCE_FAMILIES: {
   },
 ];
 
+export type PatternProsCons = {
+  architect: string[];
+  finops: string[];
+  risk: string[];
+};
+
 export type PatternDefinition = {
   pattern_id: string;
   family: ResourceFamily;
@@ -42,6 +48,9 @@ export type PatternDefinition = {
   audit_statement: string;
   finops_notes: string;
   architect_summary: string;
+  /** Decisioning aid for architects + FinOps + risk (Layer-1 catalog cards). */
+  pros: PatternProsCons;
+  cons: PatternProsCons;
 };
 
 /** Canonical taxonomy — mirrored in schema.sql seed. */
@@ -56,6 +65,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     finops_notes:
       'Lowest RDS HA cost posture; no standby instance charge. Accept residual AZ-failure risk.',
     architect_summary: 'Single writer, one AZ. No Multi-AZ, no cross-region/DR replica.',
+    pros: {
+      architect: ['Simple topology; clear blast radius', 'Fast to provision and change'],
+      finops: ['No Multi-AZ standby instance charge', 'Lower storage IOPS floor for non-critical'],
+      risk: ['Acceptable for non-critical / recoverable workloads'],
+    },
+    cons: {
+      architect: ['Single AZ failure takes writer offline', 'No automatic synchronous standby'],
+      finops: ['Outage cost can exceed HA premium for critical apps'],
+      risk: ['RTO/RPO tied to backup restore; AZ risk residual'],
+    },
   },
   {
     pattern_id: 'PAT-RDS-PGSQL-MULTIAZ-HA',
@@ -67,6 +86,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     finops_notes:
       'HA premium: Multi-AZ standby roughly doubles instance cost; DR replicas add additional capacity.',
     architect_summary: 'Multi-AZ and/or replica/DR topology for PostgreSQL RDS.',
+    pros: {
+      architect: ['Synchronous standby / Multi-AZ failover path', 'Supports DR or read-replica extras'],
+      finops: ['Predictable HA spend aligned to SLA tier'],
+      risk: ['Lower RTO on AZ failure; stronger audit HA story'],
+    },
+    cons: {
+      architect: ['More SG/subnet/AZ wiring to review', 'Failover semantics must be tested'],
+      finops: ['~2× instance cost for Multi-AZ; replicas add more'],
+      risk: ['Misconfigured SG/CIDR still blocks HA benefit'],
+    },
   },
   {
     pattern_id: 'PAT-RDS-MSSQL-SINGLE-AZ-STD',
@@ -76,6 +105,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     audit_statement: 'Control: SQL Server RDS single-AZ without Multi-AZ or custom DR.',
     finops_notes: 'Standard SQL Server license + single instance; no HA standby spend.',
     architect_summary: 'Single-AZ SQL Server RDS writer only.',
+    pros: {
+      architect: ['Minimal SQL Server footprint', 'Straightforward ingress on 1433'],
+      finops: ['Single license + instance; no HA standby'],
+      risk: ['Fits lower criticality SQL Server apps'],
+    },
+    cons: {
+      architect: ['No Multi-AZ standby', 'License + AZ risk concentrated'],
+      finops: ['Outage + license waste if criticality underestimated'],
+      risk: ['AZ failure = full writer outage'],
+    },
   },
   {
     pattern_id: 'PAT-RDS-MSSQL-MULTIAZ-HA',
@@ -85,6 +124,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     audit_statement: 'Control: SQL Server RDS Multi-AZ and/or DR/replica HA posture.',
     finops_notes: 'Multi-AZ + SQL Server licensing compounds HA cost; justify for criticality tier.',
     architect_summary: 'Multi-AZ / replica SQL Server RDS topology.',
+    pros: {
+      architect: ['Multi-AZ HA for SQL Server workloads', 'Aligns with enterprise RTO targets'],
+      finops: ['Cost maps clearly to criticality justification'],
+      risk: ['Stronger continuity vs single-AZ SQL Server'],
+    },
+    cons: {
+      architect: ['Complex license + HA topology review'],
+      finops: ['Multi-AZ + SQL licensing compounds spend'],
+      risk: ['Requires validated failover and SG posture'],
+    },
   },
   {
     pattern_id: 'PAT-RDS-APGSQL-SINGLE-WRITER',
@@ -95,6 +144,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
       'Control: Aurora PostgreSQL cluster with single writer and no Multi-AZ reader/DR extras.',
     finops_notes: 'Minimal Aurora cluster cost; no reader nodes or cross-AZ HA premium.',
     architect_summary: 'Aurora PG single writer; no additional readers / Multi-AZ HA extras detected.',
+    pros: {
+      architect: ['Aurora storage benefits with minimal cluster shape', 'Simple writer path'],
+      finops: ['No reader node spend'],
+      risk: ['Adequate when readers/HA extras not required'],
+    },
+    cons: {
+      architect: ['No reader scale-out', 'Limited HA extras vs HA-cluster pattern'],
+      finops: ['Still Aurora base cost vs plain RDS'],
+      risk: ['Writer concentration; promote only when SLA allows'],
+    },
   },
   {
     pattern_id: 'PAT-RDS-APGSQL-HA-CLUSTER',
@@ -105,6 +164,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     finops_notes:
       'Reader nodes and Multi-AZ storage/compute increase Aurora spend; maps to HA SLA tier.',
     architect_summary: 'Aurora PG with Multi-AZ and/or reader/DR topology.',
+    pros: {
+      architect: ['Readers + Multi-AZ for HA/scale', 'Clear promotion path for critical apps'],
+      finops: ['Spend tied to SLA / read scale needs'],
+      risk: ['Strong HA and read-path resilience story'],
+    },
+    cons: {
+      architect: ['More nodes/AZs/SGs to audit', 'Reader routing must be intentional'],
+      finops: ['Reader + Multi-AZ premium'],
+      risk: ['Mis-tagged readers can hide incomplete HA'],
+    },
   },
   {
     pattern_id: 'PAT-EC2-ORACLE-SINGLE',
@@ -114,6 +183,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     audit_statement: 'Control: Oracle on EC2 as a single instance without a DR/standby pair.',
     finops_notes: 'Single EC2 + attached storage; no idle DR compute cost.',
     architect_summary: 'One Oracle EC2 instance; no DR/standby counterpart detected.',
+    pros: {
+      architect: ['Simple Oracle-on-EC2 footprint', 'Clear SG/listener (1521) path'],
+      finops: ['No idle DR compute'],
+      risk: ['Fits non-critical / backup-restorable Oracle'],
+    },
+    cons: {
+      architect: ['No standby pair', 'Manual recovery dependency'],
+      finops: ['Outage cost may dwarf idle DR spend'],
+      risk: ['Instance/AZ failure = full Oracle outage'],
+    },
   },
   {
     pattern_id: 'PAT-EC2-ORACLE-DR-PAIR',
@@ -124,6 +203,16 @@ export const PATTERN_TAXONOMY: PatternDefinition[] = [
     finops_notes:
       'DR standby roughly doubles compute/storage; tag Role=dr-standby for FinOps attribution.',
     architect_summary: 'Primary + DR/standby Oracle EC2 topology across AZ or role tags.',
+    pros: {
+      architect: ['Primary + standby across AZ/role', 'Supports Oracle DR runbooks'],
+      finops: ['Standby cost attributable via Role tags'],
+      risk: ['Lower RTO with tested failover'],
+    },
+    cons: {
+      architect: ['Pair wiring + Data Guard/replication ops'],
+      finops: ['~2× compute/storage for standby'],
+      risk: ['Untested failover leaves residual risk'],
+    },
   },
 ];
 

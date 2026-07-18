@@ -29,9 +29,32 @@ export type ArchitectureNode = {
   detail?: string;
   aws_type?: string;
   facts?: Record<string, string | boolean | number | null>;
+  /** AZ key for canvas columns: a | b | c … */
+  az?: string | null;
+  /** Subnet tier for nested AWS-style boxes */
+  subnet_tier?: 'public' | 'private' | null;
+  /** Owning VPC node id when known */
+  vpc?: string | null;
+  region?: string | null;
   x?: number;
   y?: number;
   source?: 'live' | 'seed';
+};
+
+export type ArchitectureAzColumn = {
+  id: string;
+  key: string;
+  label: string;
+  short: string;
+  provisioned: boolean;
+};
+
+/** Nested AWS Cloud → Region → AZ → VPC → subnet canvas (Layer-1 stamp diagrams). */
+export type ArchitectureCanvas = {
+  region: string;
+  multi_az: boolean;
+  azs: ArchitectureAzColumn[];
+  vpc?: { id: string; label: string; cidr?: string };
 };
 
 export type ArchitectureEdge = {
@@ -57,6 +80,15 @@ export type TrafficRow = {
   source_kind?: 'live' | 'seed';
 };
 
+export type ArchitectureLane = {
+  id: string;
+  label: string;
+  order: number;
+  /** AWS-style lane hint for UI (internet | edge | vpc | az | security | data | cidr) */
+  kind: 'internet' | 'edge' | 'vpc' | 'az' | 'security' | 'data' | 'cidr' | 'other';
+  node_ids: string[];
+};
+
 export type ArchitecturePayload = {
   pattern_id: string;
   family: ResourceFamily;
@@ -64,7 +96,11 @@ export type ArchitecturePayload = {
   display_name: string;
   nodes: ArchitectureNode[];
   edges: ArchitectureEdge[];
-  /** Graph shape compatible with DependencyGraph */
+  /** Structured swimlanes (legacy / debug); Layer-1 UI prefers canvas. */
+  lanes: ArchitectureLane[];
+  /** AWS nested-boundary canvas for stamp-ready diagrams. */
+  canvas: ArchitectureCanvas;
+  /** Graph shape (still available for Layer-2 / debug); Layer-1 UI uses canvas. */
   graph: { nodes: ArchitectureNode[]; edges: ArchitectureEdge[] };
   ingress: TrafficRow[];
   egress: TrafficRow[];
@@ -75,7 +111,7 @@ export type ArchitecturePayload = {
   stamp: any;
   stamped: boolean;
   instance_count: number;
-  sources: { neo4j: boolean; postgres: boolean; seed: boolean };
+  sources: { neo4j: boolean; postgres: boolean; seed: boolean; milvus?: boolean };
 };
 
 type SgRule = {
@@ -245,6 +281,29 @@ function layoutPositions(role: ArchRole, index: number): { x: number; y: number 
   return { x: lane.x + (index % 2) * 40, y: lane.y0 + Math.floor(index / 2) * 70 };
 }
 
+/** Normalize AZ strings to column keys a|b|c… */
+export function azColumnKey(raw: string | null | undefined): string | null {
+  const s = asString(raw).toLowerCase().trim();
+  if (!s) return null;
+  const m = s.match(/(?:availability.?zone.?|az.?|us-[a-z]+-\d)?([a-f])$/i) || s.match(/([a-f])$/);
+  if (m) return m[1].toLowerCase();
+  if (s.includes('1a') || s === 'a' || s.endsWith('-a')) return 'a';
+  if (s.includes('1b') || s === 'b' || s.endsWith('-b')) return 'b';
+  if (s.includes('1c') || s === 'c' || s.endsWith('-c')) return 'c';
+  return null;
+}
+
+function subnetTierFromAttrs(attrs: Record<string, any> | undefined, label = ''): 'public' | 'private' | null {
+  if (!attrs && !label) return null;
+  const lab = `${label} ${asString(attrs?.tags?.Name) || ''} ${asString(attrs?.name) || ''}`.toLowerCase();
+  if (lab.includes('public')) return 'public';
+  if (lab.includes('private')) return 'private';
+  const mapPublic = asBool(attrs?.map_public_ip_on_launch);
+  if (mapPublic === true) return 'public';
+  if (mapPublic === false) return 'private';
+  return null;
+}
+
 /** Family-specific seed architecture when live SG/topology is thin. */
 export function buildSeedArchitecture(
   def: PatternDefinition,
@@ -256,6 +315,7 @@ export function buildSeedArchitecture(
   const engine =
     asString(primary?.attributes?.engine) ||
     (def.family === 'Ec2Oracle' ? 'oracle' : def.family.includes('MSSQL') ? 'sqlserver' : 'postgres');
+  const region = 'us-east-1';
 
   const nodes: ArchitectureNode[] = [];
   const edges: ArchitectureEdge[] = [];
@@ -265,17 +325,18 @@ export function buildSeedArchitecture(
 
   const add = (n: Omit<ArchitectureNode, 'x' | 'y'> & { x?: number; y?: number }) => {
     const pos = n.x != null ? { x: n.x, y: n.y! } : layoutPositions(n.role, nodes.filter((x) => x.role === n.role).length);
-    nodes.push({ ...n, ...pos, source: 'seed' });
+    nodes.push({ ...n, region: n.region ?? region, ...pos, source: 'seed' });
   };
 
   add({
     id: 'seed:vpc',
-    label: 'VPC core',
+    label: 'Virtual private cloud (VPC)',
     type: 'cloudresource',
     role: 'vpc',
     aws_type: 'aws_vpc',
     detail: 'aws_vpc',
     facts: { cidr: '10.20.0.0/16' },
+    vpc: 'seed:vpc',
   });
   add({
     id: 'seed:cidr-vpc',
@@ -283,6 +344,7 @@ export function buildSeedArchitecture(
     type: 'cidrblock',
     role: 'cidr',
     detail: '10.20.0.0/16',
+    vpc: 'seed:vpc',
   });
   edges.push({
     from: 'seed:vpc',
@@ -293,45 +355,68 @@ export function buildSeedArchitecture(
     source: 'seed',
   });
 
+  // Public + private subnets per AZ (AWS reference layout)
   add({
-    id: 'seed:subnet-a',
-    label: 'Private A · us-east-1a',
+    id: 'seed:subnet-pub-a',
+    label: 'Public subnet',
     type: 'cloudresource',
     role: 'subnet',
     aws_type: 'aws_subnet',
     detail: 'aws_subnet',
-    facts: { cidr: '10.20.1.0/24', az: 'us-east-1a' },
+    az: 'a',
+    subnet_tier: 'public',
+    vpc: 'seed:vpc',
+    facts: { cidr: '10.20.10.0/24', az: `${region}a`, tier: 'public' },
   });
-  edges.push({
-    from: 'seed:subnet-a',
-    to: 'seed:vpc',
-    type: 'IN_VPC',
-    direction: 'placement',
-    label: 'IN_VPC',
-    source: 'seed',
+  add({
+    id: 'seed:subnet-priv-a',
+    label: 'Private subnet',
+    type: 'cloudresource',
+    role: 'subnet',
+    aws_type: 'aws_subnet',
+    detail: 'aws_subnet',
+    az: 'a',
+    subnet_tier: 'private',
+    vpc: 'seed:vpc',
+    facts: { cidr: '10.20.1.0/24', az: `${region}a`, tier: 'private' },
   });
+  edges.push(
+    { from: 'seed:subnet-pub-a', to: 'seed:vpc', type: 'IN_VPC', direction: 'placement', label: 'IN_VPC', source: 'seed' },
+    { from: 'seed:subnet-priv-a', to: 'seed:vpc', type: 'IN_VPC', direction: 'placement', label: 'IN_VPC', source: 'seed' },
+  );
 
   if (multiAz) {
     add({
-      id: 'seed:subnet-b',
-      label: 'Private B · us-east-1b',
+      id: 'seed:subnet-pub-b',
+      label: 'Public subnet',
       type: 'cloudresource',
       role: 'subnet',
       aws_type: 'aws_subnet',
       detail: 'aws_subnet',
-      facts: { cidr: '10.20.2.0/24', az: 'us-east-1b' },
+      az: 'b',
+      subnet_tier: 'public',
+      vpc: 'seed:vpc',
+      facts: { cidr: '10.20.20.0/24', az: `${region}b`, tier: 'public' },
     });
-    edges.push({
-      from: 'seed:subnet-b',
-      to: 'seed:vpc',
-      type: 'IN_VPC',
-      direction: 'placement',
-      label: 'IN_VPC',
-      source: 'seed',
+    add({
+      id: 'seed:subnet-priv-b',
+      label: 'Private subnet',
+      type: 'cloudresource',
+      role: 'subnet',
+      aws_type: 'aws_subnet',
+      detail: 'aws_subnet',
+      az: 'b',
+      subnet_tier: 'private',
+      vpc: 'seed:vpc',
+      facts: { cidr: '10.20.2.0/24', az: `${region}b`, tier: 'private' },
     });
+    edges.push(
+      { from: 'seed:subnet-pub-b', to: 'seed:vpc', type: 'IN_VPC', direction: 'placement', label: 'IN_VPC', source: 'seed' },
+      { from: 'seed:subnet-priv-b', to: 'seed:vpc', type: 'IN_VPC', direction: 'placement', label: 'IN_VPC', source: 'seed' },
+    );
     facts.push('Multi-AZ: subnets in us-east-1a and us-east-1b');
   } else {
-    facts.push('Single-AZ placement (private subnet A)');
+    facts.push('Single-AZ placement (AZ-a provisioned; AZ-b not provisioned)');
   }
 
   add({
@@ -341,6 +426,8 @@ export function buildSeedArchitecture(
     role: 'igw',
     aws_type: 'aws_internet_gateway',
     detail: 'aws_internet_gateway',
+    vpc: 'seed:vpc',
+    subnet_tier: 'public',
   });
   edges.push({
     from: 'seed:igw',
@@ -358,9 +445,20 @@ export function buildSeedArchitecture(
     role: 'nat',
     aws_type: 'aws_nat_gateway',
     detail: 'aws_nat_gateway',
+    az: 'a',
+    subnet_tier: 'public',
+    vpc: 'seed:vpc',
   });
   edges.push({
-    from: 'seed:subnet-a',
+    from: 'seed:nat',
+    to: 'seed:subnet-pub-a',
+    type: 'IN_SUBNET',
+    direction: 'placement',
+    label: 'IN_SUBNET',
+    source: 'seed',
+  });
+  edges.push({
+    from: 'seed:subnet-priv-a',
     to: 'seed:nat',
     type: 'ROUTES_VIA',
     direction: 'egress',
@@ -377,6 +475,9 @@ export function buildSeedArchitecture(
     role: 'sg',
     aws_type: 'aws_security_group',
     detail: 'aws_security_group',
+    vpc: 'seed:vpc',
+    az: 'a',
+    subnet_tier: 'private',
   });
   edges.push({
     from: 'seed:sg',
@@ -430,7 +531,6 @@ export function buildSeedArchitecture(
     detail: '0.0.0.0/0 via NAT path',
     source: 'seed',
   });
-  // Represent world egress target
   add({
     id: 'seed:cidr-world',
     label: '0.0.0.0/0',
@@ -468,10 +568,14 @@ export function buildSeedArchitecture(
       role: 'ec2',
       aws_type: 'aws_instance',
       detail: 'aws_instance',
+      az: 'a',
+      subnet_tier: 'private',
+      vpc: 'seed:vpc',
       facts: {
         multi_az: multiAz,
         engine: 'oracle',
         pattern: def.pattern_id,
+        az: `${region}a`,
       },
     });
     if (multiAz) {
@@ -482,11 +586,14 @@ export function buildSeedArchitecture(
         role: 'ec2',
         aws_type: 'aws_instance',
         detail: 'aws_instance',
-        facts: { role: 'dr-standby', az: 'us-east-1b' },
+        az: 'b',
+        subnet_tier: 'private',
+        vpc: 'seed:vpc',
+        facts: { role: 'dr-standby', az: `${region}b` },
       });
       edges.push({
         from: 'seed:workload-dr',
-        to: 'seed:subnet-b',
+        to: 'seed:subnet-priv-b',
         type: 'IN_SUBNET',
         direction: 'placement',
         label: 'IN_SUBNET',
@@ -505,23 +612,63 @@ export function buildSeedArchitecture(
   } else {
     add({
       id: workloadId,
-      label: primary?.name || (def.family.includes('APGSQL') ? 'Aurora PG' : 'RDS'),
+      label: primary?.name || (def.family.includes('APGSQL') ? 'Aurora PG' : 'RDS primary'),
       type: 'cloudresource',
       role: 'rds',
       aws_type: def.family.includes('APGSQL') ? 'aws_rds_cluster' : 'aws_db_instance',
       detail: def.family.includes('APGSQL') ? 'aws_rds_cluster' : 'aws_db_instance',
+      az: 'a',
+      subnet_tier: 'private',
+      vpc: 'seed:vpc',
       facts: {
         multi_az: multiAz,
         engine,
         pattern: def.pattern_id,
+        az: `${region}a`,
+        role: 'primary',
       },
     });
+    if (multiAz) {
+      add({
+        id: 'seed:workload-standby',
+        label: def.family.includes('APGSQL') ? 'Aurora reader' : 'RDS standby',
+        type: 'cloudresource',
+        role: 'rds',
+        aws_type: def.family.includes('APGSQL') ? 'aws_rds_cluster_instance' : 'aws_db_instance',
+        detail: def.family.includes('APGSQL') ? 'aws_rds_cluster_instance' : 'aws_db_instance',
+        az: 'b',
+        subnet_tier: 'private',
+        vpc: 'seed:vpc',
+        facts: {
+          multi_az: true,
+          engine,
+          role: 'standby',
+          az: `${region}b`,
+        },
+      });
+      edges.push({
+        from: 'seed:workload-standby',
+        to: 'seed:subnet-priv-b',
+        type: 'IN_SUBNET',
+        direction: 'placement',
+        label: 'IN_SUBNET',
+        source: 'seed',
+      });
+      edges.push({
+        from: 'seed:workload-standby',
+        to: 'seed:sg',
+        type: 'USES_SG',
+        direction: 'attach',
+        label: 'USES_SG',
+        source: 'seed',
+      });
+    }
     facts.push(multiAz ? 'Multi-AZ HA / standby topology' : 'Single-AZ writer');
   }
 
   edges.push({
     from: workloadId,
-    to: 'seed:subnet-a',
+    to: 'seed:subnet-priv-a',
     type: 'IN_SUBNET',
     direction: 'placement',
     label: 'IN_SUBNET',
@@ -623,11 +770,14 @@ export function composeArchitecture(opts: {
       role,
       aws_type: awsType,
       detail: awsType,
+      az: azColumnKey(az),
+      subnet_tier: role === 'rds' || role === 'ec2' ? 'private' : null,
       facts: {
         multi_az: multiAz,
         availability_zone: az || null,
         engine: engine || null,
         address: inst.address,
+        az: az || null,
       },
       source: 'live',
     });
@@ -676,6 +826,8 @@ export function composeArchitecture(opts: {
     const factsMap: Record<string, string | boolean | number | null> = { address: nr.address };
     if (nr.attributes?.cidr_block) factsMap.cidr = asString(nr.attributes.cidr_block);
     if (nr.attributes?.availability_zone) factsMap.az = asString(nr.attributes.availability_zone);
+    const tier = nr.type === 'aws_subnet' ? subnetTierFromAttrs(nr.attributes, nr.name) : null;
+    if (tier) factsMap.tier = tier;
     addNode({
       id: nr.id,
       label: nr.name,
@@ -683,6 +835,8 @@ export function composeArchitecture(opts: {
       role,
       aws_type: nr.type,
       detail: nr.type,
+      az: azColumnKey(asString(nr.attributes?.availability_zone)),
+      subnet_tier: tier,
       facts: factsMap,
       source: 'live',
     });
@@ -954,6 +1108,10 @@ export function composeArchitecture(opts: {
     { id: 'nat', label: 'ROUTES_VIA', meaning: 'Private subnet egress via NAT / IGW' },
   ];
 
+  const lanes = buildArchitectureLanes(nodes);
+  enrichNodePlacement(nodes, edges, def);
+  const canvas = buildArchitectureCanvas(nodes, def);
+
   return {
     pattern_id: def.pattern_id,
     family: def.family,
@@ -961,6 +1119,8 @@ export function composeArchitecture(opts: {
     display_name: def.display_name,
     nodes,
     edges,
+    lanes,
+    canvas,
     graph: { nodes, edges },
     ingress,
     egress,
@@ -977,6 +1137,195 @@ export function composeArchitecture(opts: {
       seed: usedSeed,
     },
   };
+}
+
+/** Fill az / subnet_tier / vpc on nodes from edges + role heuristics. */
+export function enrichNodePlacement(
+  nodes: ArchitectureNode[],
+  edges: ArchitectureEdge[],
+  def: PatternDefinition,
+): void {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const vpcNode = nodes.find((n) => n.role === 'vpc');
+  const multiAz = def.tier === 'complex';
+
+  for (const e of edges) {
+    if (e.type === 'IN_VPC') {
+      const child = byId.get(e.from);
+      const vpc = byId.get(e.to);
+      if (child && vpc?.role === 'vpc') child.vpc = vpc.id;
+    }
+    if (e.type === 'IN_SUBNET') {
+      const child = byId.get(e.from);
+      const subnet = byId.get(e.to);
+      if (child && subnet?.role === 'subnet') {
+        if (subnet.az) child.az = child.az || subnet.az;
+        if (subnet.subnet_tier) child.subnet_tier = child.subnet_tier || subnet.subnet_tier;
+        if (subnet.vpc) child.vpc = child.vpc || subnet.vpc;
+      }
+    }
+  }
+
+  for (const n of nodes) {
+    if (!n.vpc && vpcNode) n.vpc = vpcNode.id;
+    if (!n.az) {
+      const fromFacts =
+        azColumnKey(asString(n.facts?.az)) ||
+        azColumnKey(asString(n.facts?.availability_zone));
+      if (fromFacts) n.az = fromFacts;
+    }
+    if (!n.subnet_tier) {
+      if (n.role === 'subnet') {
+        n.subnet_tier = subnetTierFromAttrs(
+          { map_public_ip_on_launch: n.facts?.tier === 'public' ? true : n.facts?.tier === 'private' ? false : null },
+          n.label,
+        );
+        if (!n.subnet_tier && asString(n.facts?.tier) === 'public') n.subnet_tier = 'public';
+        if (!n.subnet_tier && asString(n.facts?.tier) === 'private') n.subnet_tier = 'private';
+        if (!n.subnet_tier) n.subnet_tier = 'private';
+      } else if (n.role === 'igw' || n.role === 'nat') {
+        n.subnet_tier = 'public';
+        if (n.role === 'nat' && !n.az) n.az = 'a';
+      } else if (n.role === 'rds' || n.role === 'ec2' || n.role === 'sg' || n.role === 'kms') {
+        n.subnet_tier = 'private';
+        if (!n.az) n.az = 'a';
+      }
+    }
+    // Multi-AZ standby without explicit AZ → place in b when label hints standby/reader/dr
+    if (multiAz && (n.role === 'rds' || n.role === 'ec2') && n.az === 'a') {
+      const lab = `${n.label} ${asString(n.facts?.role)}`.toLowerCase();
+      if (/(standby|reader|secondary|dr)/.test(lab)) n.az = 'b';
+    }
+  }
+}
+
+/** Build AWS Cloud → Region → AZ column canvas metadata. */
+export function buildArchitectureCanvas(
+  nodes: ArchitectureNode[],
+  def: PatternDefinition,
+): ArchitectureCanvas {
+  const multiAz = def.tier === 'complex';
+  const region =
+    asString(nodes.find((n) => n.region)?.region) ||
+    (() => {
+      for (const n of nodes) {
+        const az = asString(n.facts?.az || n.facts?.availability_zone);
+        const m = az.match(/^(us-[a-z]+-\d)/i);
+        if (m) return m[1];
+      }
+      return 'us-east-1';
+    })();
+
+  const provisionedKeys = new Set<string>();
+  for (const n of nodes) {
+    if (n.az && (n.role === 'subnet' || n.role === 'rds' || n.role === 'ec2' || n.role === 'nat')) {
+      provisionedKeys.add(n.az);
+    }
+  }
+  if (!provisionedKeys.size) provisionedKeys.add('a');
+  if (multiAz) {
+    provisionedKeys.add('a');
+    provisionedKeys.add('b');
+  }
+
+  const keys = multiAz ? ['a', 'b'] : ['a', 'b'];
+  const azs: ArchitectureAzColumn[] = keys.map((key) => ({
+    id: `az:${key}`,
+    key,
+    label: `Availability Zone`,
+    short: `${region}${key}`,
+    provisioned: multiAz ? true : key === 'a' && provisionedKeys.has('a'),
+  }));
+  // Single-AZ: mark b as not provisioned
+  if (!multiAz) {
+    azs[1].provisioned = false;
+  }
+
+  const vpcNode = nodes.find((n) => n.role === 'vpc');
+  return {
+    region,
+    multi_az: multiAz,
+    azs,
+    vpc: vpcNode
+      ? {
+          id: vpcNode.id,
+          label: vpcNode.label || 'Virtual private cloud (VPC)',
+          cidr: asString(vpcNode.facts?.cidr) || undefined,
+        }
+      : { id: 'vpc', label: 'Virtual private cloud (VPC)' },
+  };
+}
+
+/** Swimlane assignment for AWS-style reference layouts (Internet → edge → VPC → SG → data). */
+export function buildArchitectureLanes(nodes: ArchitectureNode[]): ArchitectureLane[] {
+  const byKind: Record<ArchitectureLane['kind'], ArchitectureNode[]> = {
+    internet: [],
+    edge: [],
+    vpc: [],
+    az: [],
+    security: [],
+    data: [],
+    cidr: [],
+    other: [],
+  };
+
+  for (const n of nodes) {
+    switch (n.role) {
+      case 'igw':
+      case 'nat':
+        byKind.edge.push(n);
+        break;
+      case 'vpc':
+        byKind.vpc.push(n);
+        break;
+      case 'subnet':
+      case 'route_table':
+        byKind.az.push(n);
+        break;
+      case 'sg':
+        byKind.security.push(n);
+        break;
+      case 'rds':
+      case 'ec2':
+      case 'kms':
+        byKind.data.push(n);
+        break;
+      case 'cidr': {
+        const label = String(n.label || n.detail || '');
+        if (label === '0.0.0.0/0' || label.startsWith('0.0.0.0')) byKind.internet.push(n);
+        else byKind.cidr.push(n);
+        break;
+      }
+      default:
+        byKind.other.push(n);
+    }
+  }
+
+  // Synthetic internet lane when edge exists but no world CIDR node yet
+  if (!byKind.internet.length && byKind.edge.length) {
+    // Diagram renders a static Internet box when node_ids empty for this kind
+  }
+
+  const defs: { kind: ArchitectureLane['kind']; label: string; order: number; force?: boolean }[] = [
+    { kind: 'internet', label: 'Internet / clients', order: 0, force: byKind.edge.length > 0 || byKind.cidr.length > 0 },
+    { kind: 'edge', label: 'Edge · IGW / NAT', order: 1 },
+    { kind: 'vpc', label: 'VPC', order: 2 },
+    { kind: 'az', label: 'Subnets / AZs', order: 3 },
+    { kind: 'security', label: 'Security groups', order: 4 },
+    { kind: 'data', label: 'Data plane · RDS / EC2', order: 5 },
+    { kind: 'cidr', label: 'CIDR allow lists', order: 6 },
+    { kind: 'other', label: 'Other', order: 7 },
+  ];
+
+  return defs
+    .filter((d) => byKind[d.kind].length > 0 || d.force)
+    .map((d) => ({
+      id: `lane:${d.kind}`,
+      label: d.label,
+      order: d.order,
+      kind: d.kind,
+      node_ids: byKind[d.kind].map((n) => n.id),
+    }));
 }
 
 function normalizeRef(ref: string): string {

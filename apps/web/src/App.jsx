@@ -13,11 +13,12 @@ import Observability from './pages/Observability';
 import Eol from './pages/Eol';
 import Reports from './pages/Reports';
 import Audit from './pages/Audit';
-import Activity from './pages/Activity';
+import ScannerMonitor from './pages/ScannerMonitor';
 import Admin from './pages/Admin';
 import DependencyHierarchy from './pages/DependencyHierarchy';
 import InfraGraph from './pages/InfraGraph';
 import ReleaseCompare from './pages/ReleaseCompare';
+import Pitch from './pages/Pitch';
 import { DEFAULT_MODULE_SLUG } from './config/blastRadiusModules';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
+          <Route path="pitch" element={<Pitch />} />
           <Route path="impact" element={<Navigate to={`/impact/${DEFAULT_MODULE_SLUG}`} replace />} />
           <Route path="impact/:moduleId" element={<BlastRadius />} />
           <Route path="dependencies" element={<DependencyHierarchy />} />
@@ -43,7 +45,8 @@ export default function App() {
           <Route path="eol" element={<Eol />} />
           <Route path="reports" element={<Reports />} />
           <Route path="audit" element={<Audit />} />
-          <Route path="activity" element={<Activity />} />
+          <Route path="activity" element={<Navigate to="/scanner" replace />} />
+          <Route path="scanner" element={<ScannerMonitor />} />
           <Route path="admin" element={<Admin />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
