@@ -18,3 +18,9 @@ data/
 # IDE
 .vscode/
 .idea/
+
+# Marketing media binaries (keep md/html/mjs/txt under docs/marketing)
+*.mp4
+docs/marketing/flyer/frames-white/*.png
+docs/marketing/flyer/whatsapp/
+docs/marketing/screenshots/
