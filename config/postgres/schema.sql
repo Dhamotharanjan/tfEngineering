@@ -541,3 +541,50 @@ ON CONFLICT (pattern_id) DO UPDATE SET
   architect_summary = EXCLUDED.architect_summary,
   detection_rules = EXCLUDED.detection_rules,
   updated_at = now();
+-- =============================================================================
+-- Phase 1: dual watermark + durable HOT impact reports
+-- =============================================================================
+-- Dual watermark alias:
+--   indexed_sha  := subscriptions.last_scanned_sha  (authoritative graph truth;
+--                    advanced ONLY by COLD/WARM worker scans — do NOT rename)
+--   last_event_sha := informational HOT watermark; never gates / advances indexed_sha
+--   indexed_at     := when last_scanned_sha was last advanced by a successful scan
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS last_event_sha TEXT;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS indexed_at TIMESTAMPTZ;
+
+COMMENT ON COLUMN subscriptions.last_scanned_sha IS
+  'Authoritative indexed_sha (graph truth). Advanced only by COLD/WARM worker scans.';
+COMMENT ON COLUMN subscriptions.last_event_sha IS
+  'Informational HOT watermark. Never advances indexed_sha / last_scanned_sha.';
+COMMENT ON COLUMN subscriptions.indexed_at IS
+  'When indexed_sha (last_scanned_sha) was last advanced by a successful COLD/WARM scan.';
+
+-- Durable store for HOT ImpactReport rows (platform domain type).
+CREATE TABLE IF NOT EXISTS impact_reports (
+  report_id TEXT PRIMARY KEY,
+  repo_id TEXT NOT NULL,
+  intent TEXT NOT NULL,
+  event_kind TEXT,
+  path TEXT NOT NULL DEFAULT 'HOT',
+  pr_number INTEGER,
+  tag TEXT,
+  from_version TEXT,
+  to_version TEXT,
+  base_sha TEXT,
+  head_sha TEXT,
+  verdict TEXT NOT NULL,
+  silent BOOLEAN NOT NULL DEFAULT false,
+  impact_exists BOOLEAN NOT NULL DEFAULT false,
+  consumer_count INTEGER NOT NULL DEFAULT 0,
+  consumers JSONB NOT NULL DEFAULT '[]',
+  evidence JSONB NOT NULL DEFAULT '[]',
+  classification_summary JSONB NOT NULL DEFAULT '{}',
+  pattern_checks JSONB NOT NULL DEFAULT '[]',
+  refresh_enqueued JSONB NOT NULL DEFAULT '[]',
+  report JSONB NOT NULL DEFAULT '{}',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_impact_reports_repo_id ON impact_reports(repo_id);
+CREATE INDEX IF NOT EXISTS idx_impact_reports_created_at ON impact_reports(created_at DESC);
+

@@ -21,8 +21,41 @@ export class ImpactController {
     return this.hydrateReport(res.rows[0]);
   }
 
+  /** List recent HOT impact_reports (Phase 1 durable store). Optional repo_id filter. */
+  @Get('reports')
+  async listHotReports(
+    @Query('repo_id') repoId?: string,
+    @Query('limit') limitRaw?: string,
+  ) {
+    const limit = Math.min(Math.max(parseInt(limitRaw || '20', 10) || 20, 1), 100);
+    const res = await this.db.query(
+      `SELECT report_id, repo_id, intent, path, pr_number, tag, from_version, to_version,
+              head_sha, verdict, silent, impact_exists, consumer_count,
+              classification_summary, created_at
+       FROM impact_reports
+       WHERE ($1::text IS NULL OR repo_id = $1)
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [repoId || null, limit],
+    );
+    return { reports: res.rows, count: res.rows.length };
+  }
+
   @Get('reports/:id')
   async getReport(@Param('id') id: string) {
+    // Phase 1 HOT reports (deep-link target) take precedence over legacy change_plans.
+    const hot = await this.db.query(
+      `SELECT report_id, repo_id, intent, event_kind, path, pr_number, tag,
+              from_version, to_version, base_sha, head_sha, verdict, silent,
+              impact_exists, consumer_count, consumers, evidence,
+              classification_summary, pattern_checks, refresh_enqueued, report, created_at
+       FROM impact_reports WHERE report_id = $1`,
+      [id],
+    );
+    if (hot.rows.length) {
+      return this.hydrateHotReport(hot.rows[0]);
+    }
+
     const res = await this.db.query(
       `SELECT id, upstream_module, from_version, to_version, status, impact_report, created_at, updated_at
        FROM change_plans WHERE id=$1`,
@@ -40,6 +73,21 @@ export class ImpactController {
     if (report.error) return report;
     const message = (body?.message || '').trim();
     if (!message) return { error: 'message_required' };
+
+    if (report.path === 'HOT' || report.report_id) {
+      return {
+        role: 'assistant',
+        content: [
+          `HOT impact report ${report.report_id}: verdict=${report.verdict}, consumers=${report.consumer_count}.`,
+          report.silent ? 'Silent (no IaC-relevant impact).' : null,
+          `Classification: ${JSON.stringify(report.classification_summary || {})}.`,
+          'Open the report deep link for full consumer evidence.',
+        ]
+          .filter(Boolean)
+          .join('\n\n'),
+        source: 'hot_report_brief',
+      };
+    }
 
     const aiUrl = process.env.AI_SERVICE_URL || 'http://localhost:8100';
     const context = {
@@ -103,6 +151,46 @@ export class ImpactController {
         .filter(Boolean)
         .join('\n\n'),
       source: 'offline_brief',
+    };
+  }
+
+  private hydrateHotReport(row: any) {
+    const full =
+      typeof row.report === 'string' ? JSON.parse(row.report || '{}') : row.report || {};
+    return {
+      report_id: row.report_id,
+      id: row.report_id,
+      path: row.path || 'HOT',
+      repo_id: row.repo_id,
+      intent: row.intent,
+      event_kind: row.event_kind,
+      pr_number: row.pr_number,
+      tag: row.tag,
+      from_version: row.from_version,
+      to_version: row.to_version,
+      base_sha: row.base_sha,
+      head_sha: row.head_sha,
+      verdict: row.verdict,
+      silent: Boolean(row.silent),
+      impact_exists: Boolean(row.impact_exists),
+      consumer_count: row.consumer_count ?? 0,
+      consumers: typeof row.consumers === 'string' ? JSON.parse(row.consumers || '[]') : row.consumers || [],
+      evidence: typeof row.evidence === 'string' ? JSON.parse(row.evidence || '[]') : row.evidence || [],
+      classification_summary:
+        typeof row.classification_summary === 'string'
+          ? JSON.parse(row.classification_summary || '{}')
+          : row.classification_summary || {},
+      pattern_checks:
+        typeof row.pattern_checks === 'string'
+          ? JSON.parse(row.pattern_checks || '[]')
+          : row.pattern_checks || [],
+      refresh_enqueued:
+        typeof row.refresh_enqueued === 'string'
+          ? JSON.parse(row.refresh_enqueued || '[]')
+          : row.refresh_enqueued || [],
+      report: full,
+      created_at: row.created_at,
+      tree_path: `/impact/reports/${encodeURIComponent(row.report_id)}`,
     };
   }
 

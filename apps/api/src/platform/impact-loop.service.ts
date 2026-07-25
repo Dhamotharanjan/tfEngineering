@@ -63,7 +63,7 @@ export class ImpactLoopService implements OnModuleInit {
       engine,
       config,
     });
-    this.log.log('ImpactLoop wired (Phase 0: HOT inline, COLD/WARM enqueue)');
+    this.log.log('ImpactLoop wired (Phase 1: dual watermark + impact_reports, HOT inline)');
   }
 
   async handleGitHubWebhook(raw: RawWebhook, secret: string | undefined): Promise<WebhookOutcome> {

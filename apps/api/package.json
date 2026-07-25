@@ -7,7 +7,9 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "test:phase0": "node --test src/platform/job-mapping.test.cjs"
+    "test:phase0": "node --test src/platform/job-mapping.test.cjs",
+    "test:phase1": "node --test src/platform/job-mapping.test.cjs src/platform/phase1-stores.test.cjs",
+    "test:platform-wiring": "npm run test:phase1"
   },
   "dependencies": {
     "@infragraph/platform": "file:../../platform",

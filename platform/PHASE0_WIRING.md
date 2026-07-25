@@ -24,14 +24,14 @@ worker. Complements [README.md](./README.md) "Wiring seams" and [DECISIONS.md](.
 
 | Item | Gap | Next phase |
 |---|---|---|
-| Dual watermark `last_event_sha` | Column not added; `Phase0WatermarkStore.setLastEventSha` is a no-op. `indexed_sha` still = `subscriptions.last_scanned_sha`. | Phase 1 |
-| `impact_reports` table | HOT reports land in `audit_log` summary rows via `Phase0ImpactReportStore`. | Phase 1 |
+| Dual watermark `last_event_sha` | **Resolved in Phase 1** — see [PHASE1_WIRING.md](./PHASE1_WIRING.md). | — |
+| `impact_reports` table | **Resolved in Phase 1** — HOT reports persist there; audit_log is breadcrumb only. | — |
 | Pattern stamps | `EmptyPatternStore` — no disturb notifications from live DB. | Phase 4 |
 | Notifier | `LogNotifier` logs only; no Slack/email/GitHub check. | Phase 3 |
 | Narrator | `TemplateNarrator` only (no AI service). | Phase 2/3 |
 | PR file list | GitHub PR webhooks often omit file paths; HOT may be silent until files are fetched via GitHub API. | Phase 2 |
 | Docker API image | `apps/api` Dockerfile build context does not yet copy `platform/`; local `npm install` builds the file dependency. Update compose/Dockerfile for image builds. | Phase 0 follow-up |
-| Worker COLD/WARM | Unchanged — still owns parse + Neo4j/Postgres write + watermark advance. | — |
+| Worker COLD/WARM | Owns parse + Neo4j/Postgres write + `indexed_sha` / `indexed_at` advance. | — |
 
 ## Routing summary
 
@@ -57,7 +57,12 @@ cd apps/worker && go test ./internal/pipeline/ -run RefuseHotScan -count=1
 
 ## Phase 1 next steps
 
-1. Add `subscriptions.last_event_sha` + `impact_reports` DDL (small migration).
-2. Fetch PR changed files when webhook payload lacks them.
-3. Wire real Notifier + GitHub check/comment (Phase 3 can absorb).
-4. Fix Docker build context so `@infragraph/platform` is available in the API image.
+**Phase 1 is done** — see [PHASE1_WIRING.md](./PHASE1_WIRING.md).
+
+Historical checklist (completed):
+
+1. Add `subscriptions.last_event_sha` + `indexed_at` + `impact_reports` DDL.
+2. Wire real watermark / report stores (HOT never advances `indexed_sha`).
+3. Read API for deep-linked HOT reports.
+
+Remaining follow-ups moved to Phase 2+ (PR file fetch, notifier, Docker context).

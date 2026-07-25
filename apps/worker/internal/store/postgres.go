@@ -125,6 +125,8 @@ func (p *Postgres) UpdateSubscriptionScan(ctx context.Context, repoID, status st
 }
 
 // UpdateSubscriptionScanWatermark records SHA watermark + scan mode stats after a successful scan.
+// last_scanned_sha is the authoritative indexed_sha (COLD/WARM only). indexed_at tracks when it advanced.
+// HOT must never call this — last_event_sha is owned by the API impact loop.
 func (p *Postgres) UpdateSubscriptionScanWatermark(ctx context.Context, repoID, status string, nodeCount int, sha, ref, mode string, stats map[string]any) error {
 	sb, _ := json.Marshal(stats)
 	fullAt := "last_full_scan_at"
@@ -134,6 +136,7 @@ func (p *Postgres) UpdateSubscriptionScanWatermark(ctx context.Context, repoID, 
 			last_scan_at=now(), last_scan_status=$2, graph_node_count=$3, updated_at=now(),
 			last_scanned_sha=COALESCE(NULLIF($4,''), last_scanned_sha),
 			last_scanned_ref=COALESCE(NULLIF($5,''), last_scanned_ref),
+			indexed_at = CASE WHEN NULLIF($4,'') IS NOT NULL THEN now() ELSE indexed_at END,
 			scan_stats=$6::jsonb,
 			last_full_scan_at = CASE WHEN $7 = 'full' OR $7 = 'reconcile' THEN now() ELSE last_full_scan_at END,
 			last_incremental_at = CASE WHEN $7 = 'incremental' THEN now() ELSE last_incremental_at END

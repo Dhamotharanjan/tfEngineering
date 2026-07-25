@@ -9,7 +9,7 @@ import type {
 import type { Subscription } from '../../domain/subscription.ts';
 import type { Watermark } from '../../domain/watermark.ts';
 import type { ModuleContract } from '../../domain/contract.ts';
-import type { ImpactReport } from '../../domain/impact.ts';
+import type { ImpactReport, ImpactedConsumer } from '../../domain/impact.ts';
 
 // Minimal SQL executor seam. Wire the existing `pg` Pool (see apps/api DbService)
 // or the worker's store.Postgres here. Kept as an injected interface so this
@@ -19,8 +19,7 @@ export interface SqlExecutor {
 }
 
 // Postgres-backed adapters. Table/column names align with config/postgres/schema.sql
-// (subscriptions, module_release_contracts, audit_log). The impact_reports table
-// is new; see platform/README.md "Wiring seams" for the suggested DDL.
+// (subscriptions dual watermark + impact_reports + module_release_contracts + audit_log).
 
 export class PostgresSubscriptionReader implements SubscriptionReader {
   private sql: SqlExecutor;
@@ -56,7 +55,7 @@ export class PostgresSubscriptionReader implements SubscriptionReader {
 }
 
 // Dual watermark. indexed_sha reuses subscriptions.last_scanned_sha (COLD/WARM);
-// last_event_sha is a new column the worker never advances.
+// last_event_sha is HOT-only informational and must never touch last_scanned_sha.
 export class PostgresWatermarkStore implements WatermarkStore {
   private sql: SqlExecutor;
   constructor(sql: SqlExecutor) {
@@ -64,22 +63,39 @@ export class PostgresWatermarkStore implements WatermarkStore {
   }
   async get(repoId: string): Promise<Watermark | null> {
     const res = await this.sql.query(
-      `SELECT id AS repo_id, last_scanned_sha AS indexed_sha, last_event_sha
+      `SELECT id AS repo_id,
+              last_scanned_sha AS indexed_sha,
+              last_event_sha,
+              indexed_at
        FROM subscriptions WHERE id = $1`,
       [repoId],
     );
     if (!res.rows.length) return null;
-    const r = res.rows[0];
-    return { repoId: r.repo_id, indexedSha: r.indexed_sha, lastEventSha: r.last_event_sha };
+    const r = res.rows[0] as any;
+    const indexedAt = r.indexed_at ? new Date(r.indexed_at).toISOString() : null;
+    return {
+      repoId: r.repo_id,
+      indexedSha: r.indexed_sha ?? null,
+      lastEventSha: r.last_event_sha ?? null,
+      indexedAt,
+      updatedAt: indexedAt ?? undefined,
+    };
   }
   async setIndexedSha(repoId: string, sha: string): Promise<void> {
-    await this.sql.query(`UPDATE subscriptions SET last_scanned_sha = $2, updated_at = now() WHERE id = $1`, [
-      repoId,
-      sha,
-    ]);
+    // COLD/WARM only — advances authoritative indexed_sha + indexed_at.
+    await this.sql.query(
+      `UPDATE subscriptions
+       SET last_scanned_sha = $2, indexed_at = now(), updated_at = now()
+       WHERE id = $1`,
+      [repoId, sha],
+    );
   }
   async setLastEventSha(repoId: string, sha: string): Promise<void> {
-    await this.sql.query(`UPDATE subscriptions SET last_event_sha = $2 WHERE id = $1`, [repoId, sha]);
+    // HOT only — must NOT touch last_scanned_sha / indexed_at.
+    await this.sql.query(
+      `UPDATE subscriptions SET last_event_sha = $2, updated_at = now() WHERE id = $1`,
+      [repoId, sha],
+    );
   }
 }
 
@@ -128,16 +144,60 @@ export class PostgresImpactReportStore implements ImpactReportStore {
     this.sql = sql;
   }
   async save(report: ImpactReport): Promise<void> {
+    const summary = classificationSummary(report.consumers ?? []);
+    const evidence = (report.consumers ?? []).map((c) => c.evidence);
     await this.sql.query(
-      `INSERT INTO impact_reports (id, module_repo_id, intent, verdict, silent, report)
-       VALUES ($1,$2,$3,$4,$5,$6::jsonb)
-       ON CONFLICT (id) DO UPDATE SET verdict = EXCLUDED.verdict, report = EXCLUDED.report`,
-      [report.reportId, report.moduleRepoId, report.intent, report.verdict, report.silent, JSON.stringify(report)],
+      `INSERT INTO impact_reports (
+         report_id, repo_id, intent, event_kind, path,
+         pr_number, tag, from_version, to_version, base_sha, head_sha,
+         verdict, silent, impact_exists, consumer_count,
+         consumers, evidence, classification_summary, pattern_checks, refresh_enqueued, report
+       ) VALUES (
+         $1,$2,$3,$4,'HOT',
+         $5,$6,$7,$8,$9,$10,
+         $11,$12,$13,$14,
+         $15::jsonb,$16::jsonb,$17::jsonb,$18::jsonb,$19::jsonb,$20::jsonb
+       )
+       ON CONFLICT (report_id) DO UPDATE SET
+         verdict = EXCLUDED.verdict,
+         silent = EXCLUDED.silent,
+         impact_exists = EXCLUDED.impact_exists,
+         consumer_count = EXCLUDED.consumer_count,
+         consumers = EXCLUDED.consumers,
+         evidence = EXCLUDED.evidence,
+         classification_summary = EXCLUDED.classification_summary,
+         pattern_checks = EXCLUDED.pattern_checks,
+         refresh_enqueued = EXCLUDED.refresh_enqueued,
+         report = EXCLUDED.report`,
+      [
+        report.reportId,
+        report.moduleRepoId,
+        report.intent,
+        report.intent,
+        report.prNumber ?? null,
+        report.toVersion ?? null,
+        report.fromVersion ?? null,
+        report.toVersion ?? null,
+        null,
+        report.headSha ?? null,
+        report.verdict,
+        report.silent,
+        report.impactExists,
+        report.consumers?.length ?? 0,
+        JSON.stringify(report.consumers ?? []),
+        JSON.stringify(evidence),
+        JSON.stringify(summary),
+        JSON.stringify(report.patternChecks ?? []),
+        JSON.stringify(report.refreshEnqueued ?? []),
+        JSON.stringify(report),
+      ],
     );
   }
   async get(reportId: string): Promise<ImpactReport | null> {
-    const res = await this.sql.query(`SELECT report FROM impact_reports WHERE id = $1`, [reportId]);
-    return res.rows.length ? (res.rows[0].report as ImpactReport) : null;
+    const res = await this.sql.query(`SELECT report FROM impact_reports WHERE report_id = $1`, [reportId]);
+    if (!res.rows.length) return null;
+    const raw = res.rows[0].report;
+    return (typeof raw === 'string' ? JSON.parse(raw) : raw) as ImpactReport;
   }
 }
 
@@ -164,6 +224,14 @@ export class PostgresAuditStore implements AuditStore {
       at: r.details?.at ?? r.event_time,
     }));
   }
+}
+
+export function classificationSummary(consumers: ImpactedConsumer[]): Record<string, number> {
+  const summary: Record<string, number> = { BREAKING: 0, NON_BREAKING: 0, UNKNOWN: 0 };
+  for (const c of consumers) {
+    summary[c.class] = (summary[c.class] ?? 0) + 1;
+  }
+  return summary;
 }
 
 function mapSubscription(r: any): Subscription {

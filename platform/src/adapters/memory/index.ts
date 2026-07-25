@@ -63,7 +63,9 @@ export class MemoryWatermarkStore implements WatermarkStore {
     this.indexedShaWrites.push({ repoId, sha });
     const wm = this.byId.get(repoId) ?? { repoId };
     wm.indexedSha = sha;
-    wm.updatedAt = new Date().toISOString();
+    const now = new Date().toISOString();
+    wm.indexedAt = now;
+    wm.updatedAt = now;
     this.byId.set(repoId, wm);
   }
   async setLastEventSha(repoId: string, sha: string): Promise<void> {

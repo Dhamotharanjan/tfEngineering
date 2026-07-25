@@ -1,61 +1,67 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type {
-  AuditEntry,
-  AuditStore,
-  ImpactReport,
-  ImpactReportStore,
-  Notification,
-  Notifier,
-  PatternStore,
-  InfraPattern,
-  PatternStamp,
-  Watermark,
-  WatermarkStore,
+import {
+  PostgresImpactReportStore,
+  PostgresWatermarkStore,
+  type AuditEntry,
+  type AuditStore,
+  type ImpactReport,
+  type ImpactReportStore,
+  type Notification,
+  type Notifier,
+  type PatternStore,
+  type InfraPattern,
+  type PatternStamp,
+  type Watermark,
+  type WatermarkStore,
+  type SqlExecutor,
 } from '@infragraph/platform';
 import { DbService } from '../db/db.service';
 
+function sqlFromDb(db: DbService): SqlExecutor {
+  return {
+    query: <T = any>(text: string, params?: unknown[]) => db.query(text, params as any[]),
+  };
+}
+
 /**
- * Phase 0 watermark: indexed_sha ← subscriptions.last_scanned_sha.
- * last_event_sha column is a Phase 1 schema follow-up — setLastEventSha is a no-op.
+ * Phase 1 dual watermark over subscriptions:
+ *   indexed_sha  := last_scanned_sha (COLD/WARM; worker is authoritative in prod)
+ *   last_event_sha := HOT informational only — never touches last_scanned_sha / indexed_at
+ *   indexed_at   := when last_scanned_sha was advanced
  */
 @Injectable()
 export class Phase0WatermarkStore implements WatermarkStore {
-  constructor(private readonly db: DbService) {}
+  private readonly inner: PostgresWatermarkStore;
 
-  async get(repoId: string): Promise<Watermark | null> {
-    const res = await this.db.query(
-      `SELECT id AS repo_id, last_scanned_sha AS indexed_sha FROM subscriptions WHERE id = $1`,
-      [repoId],
-    );
-    if (!res.rows.length) return null;
-    return {
-      repoId: res.rows[0].repo_id,
-      indexedSha: res.rows[0].indexed_sha ?? null,
-      lastEventSha: null,
-    };
+  constructor(db: DbService) {
+    this.inner = new PostgresWatermarkStore(sqlFromDb(db));
   }
 
-  async setIndexedSha(repoId: string, sha: string): Promise<void> {
-    // COLD/WARM only — worker owns this in production; keep seam for ScanRunner.
-    await this.db.query(
-      `UPDATE subscriptions SET last_scanned_sha = $2, updated_at = now() WHERE id = $1`,
-      [repoId, sha],
-    );
+  get(repoId: string): Promise<Watermark | null> {
+    return this.inner.get(repoId);
   }
 
-  async setLastEventSha(_repoId: string, _sha: string): Promise<void> {
-    // Phase 1: add subscriptions.last_event_sha. No-op in Phase 0.
+  setIndexedSha(repoId: string, sha: string): Promise<void> {
+    return this.inner.setIndexedSha(repoId, sha);
+  }
+
+  setLastEventSha(repoId: string, sha: string): Promise<void> {
+    return this.inner.setLastEventSha(repoId, sha);
   }
 }
 
-/** Persist HOT reports to audit_log until impact_reports table exists (Phase 1). */
+/** Persist HOT reports to impact_reports (+ audit_log breadcrumb for existing ops). */
 @Injectable()
 export class Phase0ImpactReportStore implements ImpactReportStore {
   private readonly log = new Logger(Phase0ImpactReportStore.name);
+  private readonly inner: PostgresImpactReportStore;
 
-  constructor(private readonly db: DbService) {}
+  constructor(private readonly db: DbService) {
+    this.inner = new PostgresImpactReportStore(sqlFromDb(db));
+  }
 
   async save(report: ImpactReport): Promise<void> {
+    await this.inner.save(report);
     try {
       await this.db.query(
         `INSERT INTO audit_log (actor, action, target, details)
@@ -76,12 +82,12 @@ export class Phase0ImpactReportStore implements ImpactReportStore {
         ],
       );
     } catch (e: any) {
-      this.log.warn(`failed to persist impact report ${report.reportId}: ${e?.message || e}`);
+      this.log.warn(`audit breadcrumb failed for ${report.reportId}: ${e?.message || e}`);
     }
   }
 
-  async get(_reportId: string): Promise<ImpactReport | null> {
-    return null;
+  get(reportId: string): Promise<ImpactReport | null> {
+    return this.inner.get(reportId);
   }
 }
 
@@ -110,7 +116,7 @@ export class Phase0AuditStore implements AuditStore {
   }
 }
 
-/** Pattern stamps not wired in Phase 0 — empty store (HOT still classifies contracts). */
+/** Pattern stamps not wired yet — empty store (HOT still classifies contracts). */
 @Injectable()
 export class EmptyPatternStore implements PatternStore {
   async patternsForModule(_moduleId: string): Promise<InfraPattern[]> {

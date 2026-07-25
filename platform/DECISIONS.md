@@ -72,3 +72,7 @@ Phase 6 (pre-apply gate, later).
 Webhook PRs no longer enqueue `incremental_scan`; they run HOT inline via
 `ImpactLoop`. Push (default branch) still enqueues WARM `incremental_scan`.
 Release/tag webhooks run HOT `tag_impact_query` inline.
+
+**Phase 1 wiring (dual watermark + reports):** see [PHASE1_WIRING.md](./PHASE1_WIRING.md).
+`last_event_sha` / `indexed_at` / `impact_reports` are live; HOT deep links
+resolve via `GET /impact/reports/:id`.
