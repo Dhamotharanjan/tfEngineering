@@ -80,3 +80,7 @@ resolve via `GET /impact/reports/:id`.
 **Phase 2 wiring (PR file fetch + AI narrator):** see [PHASE2_WIRING.md](./PHASE2_WIRING.md).
 GitHub PR webhooks that omit file lists fetch via API; narration calls
 `services/ai` `/impact/narrate` with TemplateNarrator fallback.
+
+**Phase 3 wiring (GitHub check + PR comment):** see [PHASE3_WIRING.md](./PHASE3_WIRING.md).
+HOT PR impact posts Check Runs (PASS/WARN/BLOCK → success/neutral/failure) and
+compact PR comments; silent when no IaC impact.

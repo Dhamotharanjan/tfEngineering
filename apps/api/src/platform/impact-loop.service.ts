@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs
 import {
   createNarratorFromEnv,
   GitHubAdapter,
+  GitHubNotifier,
   GitHubPrFileFetcher,
   ImpactEngine,
   ImpactLoop,
@@ -17,7 +18,6 @@ import { QueueJobEnqueuer } from './queue-job.enqueuer';
 import { NestCypherRunner } from './nest-cypher.runner';
 import {
   EmptyPatternStore,
-  LogNotifier,
   Phase0AuditStore,
   Phase0ImpactReportStore,
   Phase0WatermarkStore,
@@ -38,7 +38,6 @@ export class ImpactLoopService implements OnModuleInit {
     private readonly reports: Phase0ImpactReportStore,
     private readonly patterns: EmptyPatternStore,
     private readonly audit: Phase0AuditStore,
-    private readonly notifier: LogNotifier,
   ) {}
 
   onModuleInit() {
@@ -48,6 +47,10 @@ export class ImpactLoopService implements OnModuleInit {
     };
     const narrator = createNarratorFromEnv(process.env);
     const prFileFetcher = GitHubPrFileFetcher.fromEnv(process.env);
+    const githubNotifier = GitHubNotifier.fromEnv(process.env, {
+      deepLinkBaseUrl: config.deepLinkBaseUrl,
+      onLog: (msg) => this.log.log(msg),
+    });
     const engine = new ImpactEngine({
       graph: new Neo4jGraphReader(this.cypher),
       subscriptions: this.subscriptions,
@@ -56,7 +59,8 @@ export class ImpactLoopService implements OnModuleInit {
       patterns: this.patterns,
       reports: this.reports,
       jobs: this.jobs,
-      notifier: this.notifier,
+      notifier: githubNotifier,
+      feedback: githubNotifier,
       narrator,
       config,
     });
@@ -68,7 +72,7 @@ export class ImpactLoopService implements OnModuleInit {
       prFileFetcher,
     });
     this.log.log(
-      'ImpactLoop wired (Phase 2: PR file fetch + evidence-only AI narrator w/ TemplateNarrator fallback)',
+      'ImpactLoop wired (Phase 3: GitHub check runs + PR comments via GitHubNotifier)',
     );
   }
 

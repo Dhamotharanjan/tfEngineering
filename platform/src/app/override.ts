@@ -1,10 +1,29 @@
 import type { ImpactReport } from '../domain/impact.ts';
-import type { AuditStore, ImpactReportStore } from '../ports/index.ts';
+import type {
+  AuditStore,
+  ImpactFeedback,
+  ImpactReportStore,
+  Notification,
+} from '../ports/index.ts';
 import { CheckVerdict } from '../domain/classification.ts';
 
 export interface OverrideInput {
   actor: string;
   reason: string;
+}
+
+export interface OverrideDeps {
+  audit: AuditStore;
+  reports: ImpactReportStore;
+  /**
+   * When set with `repoFullName`, re-publishes the check run (and comment) after
+   * override so GitHub reflects WARN instead of BLOCK. Optional — API override
+   * HTTP surface may wire this later.
+   */
+  feedback?: ImpactFeedback | null;
+  /** From Subscription.githubFullName — never hardcode. */
+  repoFullName?: string;
+  notifications?: Notification[];
 }
 
 // Overriding a failing check MUST be audited (actor, reason, timestamp, target).
@@ -13,7 +32,7 @@ export interface OverrideInput {
 export async function applyOverride(
   report: ImpactReport,
   input: OverrideInput,
-  deps: { audit: AuditStore; reports: ImpactReportStore },
+  deps: OverrideDeps,
 ): Promise<ImpactReport> {
   if (report.verdict !== CheckVerdict.BLOCK) {
     throw new Error('only a BLOCK verdict can be overridden');
@@ -35,5 +54,14 @@ export async function applyOverride(
     reason: input.reason,
     at,
   });
+
+  if (deps.feedback && deps.repoFullName) {
+    await deps.feedback.publish({
+      report: overridden,
+      repoFullName: deps.repoFullName,
+      notifications: deps.notifications ?? [],
+    });
+  }
+
   return overridden;
 }

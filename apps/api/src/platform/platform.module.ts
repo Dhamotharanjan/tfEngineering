@@ -11,7 +11,7 @@ import {
   Phase0WatermarkStore,
 } from './phase0-stores';
 
-/** Providers that wire @infragraph/platform into the Nest API (Phase 0). */
+/** Providers that wire @infragraph/platform into the Nest API (Phase 0–3). */
 export const PLATFORM_PROVIDERS = [
   DbSubscriptionReader,
   QueueJobEnqueuer,
@@ -20,6 +20,7 @@ export const PLATFORM_PROVIDERS = [
   Phase0ImpactReportStore,
   Phase0AuditStore,
   EmptyPatternStore,
+  /** Kept for tests / fallback; live HOT path uses GitHubNotifier in ImpactLoopService. */
   LogNotifier,
   ImpactLoopService,
 ];

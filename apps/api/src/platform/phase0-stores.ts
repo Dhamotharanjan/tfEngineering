@@ -127,6 +127,10 @@ export class EmptyPatternStore implements PatternStore {
   }
 }
 
+/**
+ * Log-only Notifier kept for tests / fallback.
+ * Live HOT path uses platform `GitHubNotifier` (Phase 3) constructed in ImpactLoopService.
+ */
 @Injectable()
 export class LogNotifier implements Notifier {
   private readonly log = new Logger(LogNotifier.name);

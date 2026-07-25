@@ -8,6 +8,8 @@ import type {
   ImpactReportStore,
   JobEnqueuer,
   Notifier,
+  ImpactFeedback,
+  Notification,
 } from '../ports/index.ts';
 import type { FileChange } from '../domain/events.ts';
 import type {
@@ -42,6 +44,8 @@ export interface EngineDeps {
   reports: ImpactReportStore;
   jobs: JobEnqueuer;
   notifier: Notifier;
+  /** Phase 3: GitHub check run + PR comment (optional; tests may omit). */
+  feedback?: ImpactFeedback | null;
   narrator: Narrator;
   config: PlatformConfig;
 }
@@ -184,7 +188,7 @@ export class ImpactEngine {
       baseUrl: this.deps.config.deepLinkBaseUrl,
       subscriptionsById: subsById,
     });
-    if (notifications.length) await this.deps.notifier.send(notifications);
+    await this.deliverNotifications(input.repoId, report, notifications);
 
     return report;
   }
@@ -275,8 +279,32 @@ export class ImpactEngine {
     };
     await this.deps.reports.save(report);
     await this.recordEvent(input);
-    // Silence: no notifications.
+    // Silence: no recipient spam; still publish a green/neutral check when feedback is wired.
+    await this.deliverNotifications(input.repoId, report, []);
     return report;
+  }
+
+  /**
+   * Prefer ImpactFeedback (check + comment) when repoFullName resolves from the
+   * subscription. Fall back to Notifier.send for recipient-only delivery.
+   */
+  private async deliverNotifications(
+    repoId: string,
+    report: ImpactReport,
+    notifications: Notification[],
+  ): Promise<void> {
+    if (this.deps.feedback) {
+      const sub = await this.deps.subscriptions.get(repoId);
+      if (sub?.githubFullName) {
+        await this.deps.feedback.publish({
+          report,
+          repoFullName: sub.githubFullName,
+          notifications,
+        });
+        return;
+      }
+    }
+    if (notifications.length) await this.deps.notifier.send(notifications);
   }
 
   // Informational last_event_sha. HOT-only, never advances indexed_sha.

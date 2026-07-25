@@ -75,8 +75,8 @@ cd apps/api && npm run build
 
 | Item | Gap | Next phase |
 |---|---|---|
-| GitHub Check + PR comment | `LogNotifier` only — no check run / comment | **Phase 3** |
-| Richer notify (Slack/email) | Recipients resolved; delivery is log-only | Phase 3 |
+| GitHub Check + PR comment | `LogNotifier` only — no check run / comment | **Resolved in Phase 3** — see [PHASE3_WIRING.md](./PHASE3_WIRING.md) |
+| Richer notify (Slack/email) | Recipients resolved; delivery is log-only | Optional / later |
 | Pattern stamps / disturb | `EmptyPatternStore` | Phase 4 |
 | Docker API image copies `platform/` | **Done by sibling** — see [DOCKER_BUILD.md](./DOCKER_BUILD.md) | — |
 | Optional: richer HOT Neo4j fan-out e2e | Engine paths exist; live contracts+graph depth | Phase 2 follow-up / 3 |

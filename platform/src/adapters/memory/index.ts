@@ -12,6 +12,8 @@ import type {
   AuditEntry,
   Notifier,
   Notification,
+  ImpactFeedback,
+  ImpactFeedbackInput,
 } from '../../ports/index.ts';
 import type { Subscription } from '../../domain/subscription.ts';
 import type { Watermark } from '../../domain/watermark.ts';
@@ -171,5 +173,12 @@ export class MemoryNotifier implements Notifier {
   readonly sent: Notification[] = [];
   async send(notifications: Notification[]): Promise<void> {
     this.sent.push(...notifications);
+  }
+}
+
+export class MemoryImpactFeedback implements ImpactFeedback {
+  readonly published: ImpactFeedbackInput[] = [];
+  async publish(input: ImpactFeedbackInput): Promise<void> {
+    this.published.push(input);
   }
 }

@@ -10,7 +10,8 @@
     "test:phase0": "node --test src/platform/job-mapping.test.cjs",
     "test:phase1": "node --test src/platform/job-mapping.test.cjs src/platform/phase1-stores.test.cjs",
     "test:phase2": "node --test src/platform/job-mapping.test.cjs src/platform/phase1-stores.test.cjs src/platform/phase2-wiring.test.cjs",
-    "test:platform-wiring": "npm run test:phase2"
+    "test:phase3": "node --test src/platform/job-mapping.test.cjs src/platform/phase1-stores.test.cjs src/platform/phase2-wiring.test.cjs src/platform/phase3-wiring.test.cjs",
+    "test:platform-wiring": "npm run test:phase3"
   },
   "dependencies": {
     "@infragraph/platform": "file:../../platform",

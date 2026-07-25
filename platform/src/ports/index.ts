@@ -85,3 +85,17 @@ export interface Notification {
 export interface Notifier {
   send(notifications: Notification[]): Promise<void>;
 }
+
+/**
+ * VCS check-run + PR comment surface for HOT reports (Phase 3).
+ * `repoFullName` must come from a Subscription — never hardcode owner/repo.
+ */
+export interface ImpactFeedbackInput {
+  report: ImpactReport;
+  repoFullName: string;
+  notifications: Notification[];
+}
+
+export interface ImpactFeedback {
+  publish(input: ImpactFeedbackInput): Promise<void>;
+}
