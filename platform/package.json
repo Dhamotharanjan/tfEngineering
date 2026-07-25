@@ -4,10 +4,28 @@
   "private": true,
   "description": "Reference implementation of the InfraGraph impact-loop architecture (COLD / WARM / HOT).",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./src/index.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "DECISIONS.md"
+  ],
   "engines": {
     "node": ">=22.6.0"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json && node ./scripts/write-dist-package.mjs",
+    "prepare": "npm run build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --test \"src/**/*.test.ts\"",
     "test:typed": "npm run typecheck && npm test"

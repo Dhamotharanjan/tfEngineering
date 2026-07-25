@@ -52,6 +52,10 @@ func (r *Runner) RunReconcileScan(ctx context.Context, jobID, repoID string) err
 }
 
 func (r *Runner) runScan(ctx context.Context, jobID, repoID string, mode scanMode, payload map[string]any) error {
+	if err := RefuseHotScanTrigger(payload); err != nil {
+		return err
+	}
+
 	sub, err := intake.ValidateSubscription(ctx, r.Loader, r.Store, repoID)
 	if err != nil {
 		return err
@@ -311,6 +315,8 @@ func (r *Runner) ProcessJob(ctx context.Context, job *models.Job) error {
 		return r.RunMandatoryImpact(ctx, jobID, job.RepoID, job.Payload)
 	case "module_impact_hint":
 		return r.RunModuleImpactHint(ctx, jobID, job.RepoID, job.Payload)
+	case "pr_impact_query", "tag_impact_query":
+		return fmt.Errorf("job type %s is HOT and must run in the API ImpactLoop (refusing worker graph path)", job.Type)
 	case "clear_artifacts":
 		return r.ClearArtifacts(ctx)
 	default:

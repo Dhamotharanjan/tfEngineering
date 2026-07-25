@@ -66,5 +66,9 @@ Phase 6 (pre-apply gate, later).
 
 ## Status
 
-`platform/` is a tested reference implementation (32/32 tests green). It is NOT
-yet wired into the live API/worker. Wiring seams are listed in `README.md`.
+`platform/` is a tested reference implementation (32/32 tests green).
+
+**Phase 0 wiring (live API):** see [PHASE0_WIRING.md](./PHASE0_WIRING.md).
+Webhook PRs no longer enqueue `incremental_scan`; they run HOT inline via
+`ImpactLoop`. Push (default branch) still enqueues WARM `incremental_scan`.
+Release/tag webhooks run HOT `tag_impact_query` inline.

@@ -19,6 +19,7 @@ import { SchedulerService } from './scheduler/scheduler.service';
 import { SchedulerController } from './scheduler/scheduler.controller';
 import { ScannerController } from './scanner/scanner.controller';
 import { ImpactController } from './impact/impact.controller';
+import { PLATFORM_PROVIDERS } from './platform/platform.module';
 
 @Module({
   imports: [],
@@ -45,6 +46,7 @@ import { ImpactController } from './impact/impact.controller';
     AdminService,
     ReleaseCompareService,
     SchedulerService,
+    ...PLATFORM_PROVIDERS,
   ],
 })
 export class AppModule {}

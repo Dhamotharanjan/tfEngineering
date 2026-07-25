@@ -6,15 +6,19 @@ import {
   Req,
   UnauthorizedException,
 } from '@nestjs/common';
-import { createHmac, timingSafeEqual } from 'crypto';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
 import { QueueService } from '../queue/queue.service';
 import { DbService } from '../db/db.service';
+import { ImpactLoopService } from '../platform/impact-loop.service';
 
 @Controller('webhooks')
 export class WebhooksController {
-  constructor(private queue: QueueService, private db: DbService) {}
+  constructor(
+    private queue: QueueService,
+    private db: DbService,
+    private impactLoop: ImpactLoopService,
+  ) {}
 
   @Post('github')
   async githubWebhook(
@@ -24,16 +28,20 @@ export class WebhooksController {
     @Headers('x-hub-signature-256') signature: string | undefined,
     @Headers('x-github-delivery') deliveryId: string | undefined,
   ) {
-    this.verifyGitHubSignature(req, body, signature);
+    const secret = this.webhookSecret();
+    this.assertSecretPolicy(secret);
 
-    const rawName =
-      body?.repository?.full_name ||
-      body?.repository?.name ||
-      '';
-    const repoId = await this.resolveRepoId(rawName);
+    const headers: Record<string, string | undefined> = {
+      'x-github-event': event,
+      'x-hub-signature-256': signature,
+      'x-github-delivery': deliveryId,
+    };
+
+    const rawName = body?.repository?.full_name || body?.repository?.name || '';
     const action = body?.action;
 
-    const accepted = await this.recordDelivery(deliveryId, event, repoId, {
+    // Dedup before routing (same delivery_id must not fan out twice).
+    const accepted = await this.recordDelivery(deliveryId, event, rawName, {
       action,
       ref: body?.ref,
       after: body?.after,
@@ -43,95 +51,83 @@ export class WebhooksController {
       return { accepted: true, deduped: true, delivery_id: deliveryId };
     }
 
-    if (event === 'release' && body?.release?.tag_name) {
-      if (!repoId) {
-        return { accepted: true, skipped: 'unknown_repo', repository: rawName };
-      }
-      const sub = await this.db.query(
-        `SELECT id, subscribed, role FROM subscriptions WHERE id=$1`,
-        [repoId],
-      );
-      if (!sub.rows.length || !sub.rows[0].subscribed) {
-        return { accepted: true, skipped: 'not_subscribed', repo_id: repoId };
-      }
-      const tag = body.release.tag_name;
-      const job = await this.queue.enqueue({
-        type: 'mandatory_impact_analysis',
-        priority: 'P0',
-        repo_id: repoId,
-        payload: {
-          to_version: tag,
-          tag,
-          from_version: body?.release?.target_commitish || 'v2.4.2',
-          event: 'release',
-          delivery_id: deliveryId,
-          head_sha: body?.release?.target_commitish,
-          release_name: body?.release?.name || tag,
-          release_notes: body?.release?.body || '',
-        },
-      });
-      await this.db.query(
-        `INSERT INTO audit_log (actor, action, target) VALUES ('webhook', 'Release tag impact enqueued', $1)`,
-        [tag],
-      );
-      return { accepted: true, job, repo_id: repoId };
-    }
+    const outcome = await this.impactLoop.handleGitHubWebhook(
+      {
+        headers,
+        rawBody: req.rawBody || Buffer.alloc(0),
+        body,
+      },
+      secret,
+    );
 
-    if (event === 'push') {
-      if (!repoId) {
-        return { accepted: true, skipped: 'unknown_repo', repository: rawName };
-      }
-      const sub = await this.db.query(
-        `SELECT id, subscribed FROM subscriptions WHERE id=$1`,
-        [repoId],
-      );
-      if (!sub.rows.length || !sub.rows[0].subscribed) {
-        return { accepted: true, skipped: 'not_subscribed', repo_id: repoId };
-      }
-
-      const { job, coalesce_count, enqueued } = await this.queue.enqueueCoalesced({
-        type: 'incremental_scan',
-        priority: 'P2',
-        repo_id: repoId,
-        payload: {
-          trigger: 'webhook_push',
-          head_sha: body?.after || undefined,
-          before_sha: body?.before || undefined,
-          ref: body?.ref,
-          delivery_id: deliveryId,
-          commits: Array.isArray(body?.commits) ? body.commits.length : 0,
-        },
-      });
+    if (outcome.skipped) {
       return {
         accepted: true,
-        event: 'push',
-        repo_id: repoId,
-        job: enqueued ? job : null,
-        coalesce_count,
-        coalesced: !enqueued,
+        skipped: outcome.skipped,
+        event,
+        action,
+        repository: rawName,
       };
     }
 
-    if (event === 'pull_request' && (action === 'opened' || action === 'synchronize')) {
-      if (!repoId) {
-        return { accepted: true, skipped: 'unknown_repo' };
-      }
-      const job = await this.queue.enqueue({
-        type: 'incremental_scan',
-        priority: 'P2',
-        repo_id: repoId,
-        payload: {
-          trigger: 'pull_request',
-          head_sha: body?.pull_request?.head?.sha,
-          before_sha: body?.pull_request?.base?.sha,
-          pr_number: body?.number,
-          delivery_id: deliveryId,
+    // COLD/WARM: job was enqueued for the worker (graph write path).
+    if (outcome.enqueued) {
+      return {
+        accepted: true,
+        event: outcome.event?.kind || event,
+        path: outcome.job?.path,
+        intent: outcome.job?.intent,
+        repo_id: outcome.job?.repoId,
+        job: {
+          id: outcome.enqueued.id,
+          type:
+            outcome.job?.intent === 'cold_scan'
+              ? 'full_scan'
+              : outcome.job?.intent === 'warm_incremental'
+                ? 'incremental_scan'
+                : outcome.job?.intent,
+          priority: outcome.job?.priority,
+          repo_id: outcome.job?.repoId,
         },
-      });
-      return { accepted: true, event: 'pull_request', job, repo_id: repoId };
+      };
     }
 
-    return { accepted: true, event, action, repo_id: repoId };
+    // HOT: PR / tag impact ran inline — read-only, no graph write.
+    if (outcome.report) {
+      await this.db.query(
+        `INSERT INTO audit_log (actor, action, target) VALUES ('webhook', $1, $2)`,
+        [
+          outcome.job?.intent === 'tag_impact_query'
+            ? 'Release tag HOT impact (platform)'
+            : 'PR HOT impact (platform)',
+          outcome.report.reportId,
+        ],
+      ).catch(() => undefined);
+      return {
+        accepted: true,
+        event: outcome.event?.kind || event,
+        path: 'HOT',
+        intent: outcome.job?.intent,
+        repo_id: outcome.job?.repoId,
+        report: {
+          report_id: outcome.report.reportId,
+          silent: outcome.report.silent,
+          impact_exists: outcome.report.impactExists,
+          verdict: outcome.report.verdict,
+          consumer_count: outcome.report.consumers?.length ?? 0,
+        },
+        // Explicit: never enqueue incremental_scan for PR/tag.
+        graph_write: false,
+      };
+    }
+
+    return {
+      accepted: true,
+      event,
+      action,
+      intent: outcome.job?.intent ?? null,
+      path: outcome.job?.path ?? null,
+    };
   }
 
   @Post('impact/trigger')
@@ -145,79 +141,52 @@ export class WebhooksController {
       release_name?: string;
     },
   ) {
-    const sub = await this.db.query(
-      `SELECT id, subscribed FROM subscriptions WHERE id=$1`,
-      [body.upstream_repo_id],
-    );
+    const sub = await this.db.query(`SELECT id, subscribed FROM subscriptions WHERE id=$1`, [
+      body.upstream_repo_id,
+    ]);
     if (!sub.rows.length || !sub.rows[0].subscribed) {
       return { error: 'not_subscribed', repo_id: body.upstream_repo_id };
     }
-    const to = body.to_version || 'v3.0.0';
+    // No hardcoded version fallbacks — versions must come from the caller.
+    if (!body.to_version) {
+      return { error: 'to_version_required', repo_id: body.upstream_repo_id };
+    }
     const job = await this.queue.enqueue({
       type: 'mandatory_impact_analysis',
       priority: 'P0',
       repo_id: body.upstream_repo_id,
       payload: {
-        from_version: body.from_version || 'v2.4.2',
-        to_version: to,
-        tag: to,
+        from_version: body.from_version || null,
+        to_version: body.to_version,
+        tag: body.to_version,
         trigger: 'manual_ui',
-        release_name: body.release_name || to,
-        release_notes:
-          body.release_notes ||
-          `Manual impact trigger for ${to}. (Release notes not provided — webhook/API will fill when available.)`,
+        release_name: body.release_name || body.to_version,
+        release_notes: body.release_notes || '',
       },
     });
     return { job };
   }
 
-  private verifyGitHubSignature(
-    req: RawBodyRequest<Request>,
-    body: any,
-    signature: string | undefined,
-  ) {
-    const secret = process.env.GITHUB_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET;
-    if (!secret) {
-      // Dev/demo: allow unsigned when secret unset
-      return;
-    }
-    if (!signature?.startsWith('sha256=')) {
-      throw new UnauthorizedException('missing X-Hub-Signature-256');
-    }
-    const rawBuf = req.rawBody || Buffer.from(JSON.stringify(body));
-    const digest = createHmac('sha256', secret).update(rawBuf).digest('hex');
-    const expected = Buffer.from(`sha256=${digest}`);
-    const actual = Buffer.from(signature);
-    if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
-      throw new UnauthorizedException('invalid webhook signature');
-    }
+  private webhookSecret(): string | undefined {
+    return process.env.GITHUB_WEBHOOK_SECRET || process.env.WEBHOOK_SECRET || undefined;
   }
 
-  private async resolveRepoId(raw: string): Promise<string> {
-    if (!raw) return '';
-    const name = raw.includes('/') ? raw : raw;
-    try {
-      const res = await this.db.query(
-        `SELECT id FROM subscriptions
-         WHERE id=$1
-            OR github_full_name=$1
-            OR github_full_name=$2
-            OR split_part(github_full_name, '/', 2) = $3
-         LIMIT 1`,
-        [raw, name, raw.includes('/') ? raw.split('/')[1] : raw],
+  private assertSecretPolicy(secret: string | undefined) {
+    const requireSecret =
+      process.env.IGCS_REQUIRE_WEBHOOK_SECRET === 'true' ||
+      process.env.PLATFORM_REQUIRE_WEBHOOK_SECRET === 'true' ||
+      process.env.NODE_ENV === 'production';
+    if (!secret && requireSecret) {
+      throw new UnauthorizedException(
+        'GITHUB_WEBHOOK_SECRET is required (set IGCS_REQUIRE_WEBHOOK_SECRET=false only for local demo)',
       );
-      if (res.rows.length) return res.rows[0].id;
-    } catch {
-      /* fall through */
     }
-    // Fallback: strip owner prefix historically used in webhooks
-    return raw.replace(/^acme\//, '').replace(/^.*\//, '') || raw;
   }
 
   private async recordDelivery(
     deliveryId: string | undefined,
     event: string,
-    repoId: string,
+    repoHint: string,
     summary: Record<string, unknown>,
   ): Promise<boolean> {
     if (!deliveryId) return true;
@@ -227,7 +196,7 @@ export class WebhooksController {
          VALUES ($1,'github',$2,$3,$4::jsonb)
          ON CONFLICT (delivery_id) DO NOTHING
          RETURNING delivery_id`,
-        [deliveryId, event, repoId || null, JSON.stringify(summary)],
+        [deliveryId, event, repoHint || null, JSON.stringify(summary)],
       );
       return (res.rowCount || 0) > 0;
     } catch {
