@@ -18,7 +18,7 @@ resource "aws_s3_bucket" "app_bucket" {
 
 resource "aws_instance" "checkout_api" {
   ami           = "ami-0checkoutapi"
-  instance_type = "t3.large"
+  instance_type = "t3.xlarge"  # InfraGraph HOT POC pin/size bump
 
   tags = {
     Name = "checkout-api"
@@ -42,3 +42,4 @@ resource "aws_volume_attachment" "checkout_data" {
   volume_id   = aws_ebs_volume.checkout_data.id
   instance_id = aws_instance.checkout_api.id
 }
+
