@@ -52,10 +52,19 @@ export { resolveRecipients, DEFAULT_NOTIFY_CONFIG } from './notify/router.ts';
 export type { NotifyConfig } from './notify/router.ts';
 export { formatImpactPrComment, shouldPostPrComment } from './notify/comment.ts';
 export type { CommentFormatOptions } from './notify/comment.ts';
-export { verdictToConclusion, checkRunTitle } from './notify/check-map.ts';
-export type { CheckConclusion } from './notify/check-map.ts';
-export { GitHubNotifier, githubCheckNameFromEnv } from './notify/github-notifier.ts';
-export type { GitHubNotifierOptions } from './notify/github-notifier.ts';
+export {
+  verdictToConclusion,
+  verdictToCommitStatus,
+  checkRunTitle,
+  commitStatusDescription,
+} from './notify/check-map.ts';
+export type { CheckConclusion, CommitStatusState } from './notify/check-map.ts';
+export {
+  GitHubNotifier,
+  githubCheckNameFromEnv,
+  githubFeedbackModeFromEnv,
+} from './notify/github-notifier.ts';
+export type { GitHubNotifierOptions, GitHubFeedbackMode } from './notify/github-notifier.ts';
 
 // Narration
 export * from './narration/port.ts';

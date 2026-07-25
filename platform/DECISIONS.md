@@ -82,5 +82,6 @@ GitHub PR webhooks that omit file lists fetch via API; narration calls
 `services/ai` `/impact/narrate` with TemplateNarrator fallback.
 
 **Phase 3 wiring (GitHub check + PR comment):** see [PHASE3_WIRING.md](./PHASE3_WIRING.md).
-HOT PR impact posts Check Runs (PASS/WARN/BLOCK → success/neutral/failure) and
-compact PR comments; silent when no IaC impact.
+HOT PR impact posts Check Runs (PASS/WARN/BLOCK → success/neutral/failure) or,
+for fine-grained PATs, Commit Statuses on 403/404 fallback; plus compact PR
+comments; silent when no IaC impact.

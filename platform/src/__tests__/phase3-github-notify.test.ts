@@ -2,7 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { GitHubNotifier } from '../notify/github-notifier.ts';
 import { formatImpactPrComment, shouldPostPrComment } from '../notify/comment.ts';
-import { verdictToConclusion, checkRunTitle } from '../notify/check-map.ts';
+import {
+  verdictToConclusion,
+  verdictToCommitStatus,
+  checkRunTitle,
+  commitStatusDescription,
+} from '../notify/check-map.ts';
 import { applyOverride } from '../app/override.ts';
 import { makeHarness, moduleSub, consumerSub, contract, pinBumpFile, FAKE } from './harness.ts';
 import { JobIntent } from '../domain/jobs.ts';
@@ -12,11 +17,21 @@ import type { FetchLike } from '../integration/adapters/github-pr-files.ts';
 
 type Captured = { method: string; url: string; body?: string };
 
-function fakeFetch(capture: Captured[], responses: Record<string, { ok?: boolean; status?: number; json?: unknown }> = {}): FetchLike {
+function fakeFetch(
+  capture: Captured[],
+  responses: Record<string, { ok?: boolean; status?: number; json?: unknown }> = {},
+): FetchLike {
   return async (url, init) => {
     const method = (init?.method || 'GET').toUpperCase();
     capture.push({ method, url, body: init?.body });
-    const key = `${method} ${url.includes('/check-runs') ? 'check' : url.includes('/comments') ? 'comment' : 'other'}`;
+    const kind = url.includes('/check-runs')
+      ? 'check'
+      : url.includes('/statuses/')
+        ? 'status'
+        : url.includes('/comments')
+          ? 'comment'
+          : 'other';
+    const key = `${method} ${kind}`;
     const preset = responses[key] ?? { ok: true, status: 201, json: { id: 42 } };
     return {
       ok: preset.ok !== false,
@@ -57,6 +72,17 @@ test('verdictToConclusion: PASS/WARN/BLOCK/silent map correctly', () => {
     'success',
   );
   assert.equal(checkRunTitle(baseReport({ silent: true, impactExists: false })), 'No IaC impact');
+});
+
+test('verdictToCommitStatus: WARN→success with WARN description; BLOCK→failure', () => {
+  assert.equal(verdictToCommitStatus(baseReport({ verdict: CheckVerdict.PASS })), 'success');
+  assert.equal(verdictToCommitStatus(baseReport({ verdict: CheckVerdict.WARN })), 'success');
+  assert.equal(verdictToCommitStatus(baseReport({ verdict: CheckVerdict.BLOCK })), 'failure');
+  assert.equal(
+    verdictToCommitStatus(baseReport({ silent: true, impactExists: false })),
+    'success',
+  );
+  assert.match(commitStatusDescription(baseReport({ verdict: CheckVerdict.WARN })), /^WARN:/);
 });
 
 test('shouldPostPrComment: silent → false', () => {
@@ -205,6 +231,75 @@ test('GitHubNotifier: non-breaking → pass check + short comment', async () => 
   assert.match(commentBody, /PASS/);
   assert.match(commentBody, /Non-breaking \| 1/);
   assert.ok(commentBody.length < 1200);
+});
+
+test('GitHubNotifier: check run 403 → commit status fallback with correct state', async () => {
+  const capture: Captured[] = [];
+  const logs: string[] = [];
+  const notifier = new GitHubNotifier({
+    token: 't',
+    fetch: fakeFetch(capture, {
+      'POST check': { ok: false, status: 403 },
+      'POST status': { ok: true, status: 201, json: { id: 99 } },
+    }),
+    checkName: 'InfraGraph Impact',
+    deepLinkBaseUrl: 'https://infragraph.example.invalid',
+    onLog: (m) => logs.push(m),
+  });
+  await notifier.publish({
+    report: baseReport({ verdict: CheckVerdict.BLOCK }),
+    repoFullName: FAKE.consumerGithub,
+    notifications: [],
+  });
+  const checks = capture.filter((c) => c.url.includes('/check-runs'));
+  const statuses = capture.filter((c) => c.url.includes('/statuses/'));
+  assert.equal(checks.length, 1);
+  assert.equal(statuses.length, 1);
+  assert.equal(statuses[0].method, 'POST');
+  assert.match(statuses[0].url, new RegExp(`/statuses/${FAKE.shaHead}$`));
+  const payload = JSON.parse(statuses[0].body || '{}');
+  assert.equal(payload.state, 'failure');
+  assert.equal(payload.context, 'InfraGraph Impact');
+  assert.ok(typeof payload.description === 'string' && payload.description.length > 0);
+  assert.match(payload.target_url, /impact\/reports\/rep-phase3/);
+  assert.ok(logs.some((l) => /falling back to Commit Statuses/i.test(l)));
+  assert.ok(!logs.some((l) => /Bearer |token=/i.test(l)));
+});
+
+test('GitHubNotifier: check run 201 → no commit status POST', async () => {
+  const capture: Captured[] = [];
+  const notifier = new GitHubNotifier({
+    token: 't',
+    fetch: fakeFetch(capture),
+    checkName: 'InfraGraph Impact',
+  });
+  await notifier.publish({
+    report: baseReport({ verdict: CheckVerdict.PASS }),
+    repoFullName: FAKE.consumerGithub,
+    notifications: [],
+  });
+  assert.equal(capture.filter((c) => c.url.includes('/check-runs')).length, 1);
+  assert.equal(capture.filter((c) => c.url.includes('/statuses/')).length, 0);
+});
+
+test('GitHubNotifier: mode=status skips check run; silent still no comment', async () => {
+  const capture: Captured[] = [];
+  const notifier = new GitHubNotifier({
+    token: 't',
+    fetch: fakeFetch(capture),
+    feedbackMode: 'status',
+    checkName: 'InfraGraph Impact',
+  });
+  await notifier.publish({
+    report: baseReport({ silent: true, impactExists: false, consumers: [], verdict: CheckVerdict.PASS }),
+    repoFullName: FAKE.consumerGithub,
+    notifications: [],
+  });
+  assert.equal(capture.filter((c) => c.url.includes('/check-runs')).length, 0);
+  const statuses = capture.filter((c) => c.url.includes('/statuses/'));
+  assert.equal(statuses.length, 1);
+  assert.equal(JSON.parse(statuses[0].body || '{}').state, 'success');
+  assert.equal(capture.filter((c) => c.url.includes('/comments')).length, 0);
 });
 
 test('engine + feedback: silent PR still publishes green check only', async () => {

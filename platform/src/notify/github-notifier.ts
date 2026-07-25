@@ -5,13 +5,27 @@ import type {
   Notification,
   Notifier,
 } from '../ports/index.ts';
+import { buildDeepLinks } from '../app/deep-link.ts';
 import {
   githubApiBaseFromEnv,
   githubTokenFromEnv,
   type FetchLike,
 } from '../integration/adapters/github-pr-files.ts';
-import { checkRunTitle, verdictToConclusion } from './check-map.ts';
+import {
+  checkRunTitle,
+  commitStatusDescription,
+  verdictToCommitStatus,
+  verdictToConclusion,
+} from './check-map.ts';
 import { formatImpactPrComment, shouldPostPrComment } from './comment.ts';
+
+/**
+ * How to publish commit feedback on GitHub.
+ * - `auto` (default): Check Runs first; on 403/404 fall back to Commit Statuses (PAT-friendly).
+ * - `check`: Check Runs only (GitHub App / Checks:write).
+ * - `status`: Commit Statuses only (fine-grained PAT with Commit statuses write).
+ */
+export type GitHubFeedbackMode = 'auto' | 'check' | 'status';
 
 export interface GitHubNotifierOptions {
   /** Bearer token from GITHUB_TOKEN / GH_TOKEN. */
@@ -23,10 +37,12 @@ export interface GitHubNotifierOptions {
   apiBaseUrl?: string;
   /** Injected for offline tests. Defaults to global fetch. */
   fetch?: FetchLike;
-  /** Check run name (from PLATFORM_GITHUB_CHECK_NAME). */
+  /** Check run / status context name (from PLATFORM_GITHUB_CHECK_NAME). */
   checkName?: string;
-  /** Deep-link base for PR comment (PLATFORM_DEEP_LINK_BASE_URL). */
+  /** Deep-link base for PR comment + status target_url (PLATFORM_DEEP_LINK_BASE_URL). */
   deepLinkBaseUrl?: string;
+  /** Feedback API mode (PLATFORM_GITHUB_FEEDBACK_MODE). Default auto. */
+  feedbackMode?: GitHubFeedbackMode;
   /** Optional structured logger (Nest Logger, console, …). */
   onLog?: (message: string) => void;
 }
@@ -45,10 +61,18 @@ export function githubCheckNameFromEnv(env: NodeJS.ProcessEnv = process.env): st
   return v || DEFAULT_CHECK_NAME;
 }
 
+export function githubFeedbackModeFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): GitHubFeedbackMode {
+  const v = (env.PLATFORM_GITHUB_FEEDBACK_MODE || '').trim().toLowerCase();
+  if (v === 'check' || v === 'status' || v === 'auto') return v;
+  return 'auto';
+}
+
 /**
  * Real GitHub adapter behind `Notifier` + `ImpactFeedback`.
- * Creates/updates Check Runs and posts compact PR comments. Recipients are
- * resolved upstream (subscription contacts + config roles) — never hardcoded.
+ * Creates/updates Check Runs (App path) or Commit Statuses (PAT fallback) and
+ * posts compact PR comments. Recipients are resolved upstream — never hardcoded.
  */
 export class GitHubNotifier implements Notifier, ImpactFeedback {
   private readonly token: string;
@@ -56,6 +80,7 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
   private readonly fetchFn: FetchLike;
   private readonly checkName: string;
   private readonly deepLinkBaseUrl: string;
+  private readonly feedbackMode: GitHubFeedbackMode;
   private readonly onLog?: (message: string) => void;
 
   /** Last check-run id per head sha (best-effort update on override republish). */
@@ -67,6 +92,7 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
     this.fetchFn = opts.fetch ?? (globalThis.fetch as FetchLike);
     this.checkName = (opts.checkName || DEFAULT_CHECK_NAME).trim() || DEFAULT_CHECK_NAME;
     this.deepLinkBaseUrl = opts.deepLinkBaseUrl ?? '';
+    this.feedbackMode = opts.feedbackMode ?? 'auto';
     this.onLog = opts.onLog;
   }
 
@@ -81,6 +107,7 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
       checkName: overrides.checkName ?? githubCheckNameFromEnv(env),
       deepLinkBaseUrl:
         overrides.deepLinkBaseUrl ?? (env.PLATFORM_DEEP_LINK_BASE_URL || '').trim(),
+      feedbackMode: overrides.feedbackMode ?? githubFeedbackModeFromEnv(env),
       onLog: overrides.onLog,
     });
   }
@@ -106,7 +133,7 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
     }
 
     const { report, notifications } = input;
-    await this.upsertCheckRun(id.owner, id.repo, report);
+    await this.publishCommitFeedback(id.owner, id.repo, report);
 
     if (shouldPostPrComment(report) && report.prNumber && report.prNumber > 0) {
       const body = formatImpactPrComment(report, notifications, {
@@ -123,15 +150,50 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
     if (notifications.length) await this.send(notifications);
   }
 
-  private async upsertCheckRun(
+  private async publishCommitFeedback(
     owner: string,
     repo: string,
     report: ImpactReport,
   ): Promise<void> {
+    if (this.feedbackMode === 'status') {
+      this.log(
+        `commit feedback mode=status (forced) — using Commit Statuses API report=${report.reportId}`,
+      );
+      await this.postCommitStatus(owner, repo, report);
+      return;
+    }
+
+    const outcome = await this.upsertCheckRun(owner, repo, report);
+    if (outcome === 'ok') return;
+
+    if (this.feedbackMode === 'check') {
+      this.log(
+        `check run failed and mode=check — not falling back to commit status report=${report.reportId}`,
+      );
+      return;
+    }
+
+    // auto: fall back only when Checks API rejects (typical fine-grained PAT)
+    if (outcome === 'fallback') {
+      this.log(
+        `falling back to Commit Statuses API after check run 403/404 report=${report.reportId}`,
+      );
+      await this.postCommitStatus(owner, repo, report);
+    }
+  }
+
+  /**
+   * @returns `ok` on success; `fallback` on 403/404 (PAT without Checks); `failed` otherwise.
+   */
+  private async upsertCheckRun(
+    owner: string,
+    repo: string,
+    report: ImpactReport,
+  ): Promise<'ok' | 'fallback' | 'failed'> {
     const headSha = (report.headSha || '').trim();
     if (!headSha) {
       this.log(`check run skipped: missing headSha report=${report.reportId}`);
-      return;
+      return 'failed';
     }
 
     const conclusion = verdictToConclusion(report);
@@ -179,7 +241,9 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
       });
       if (!res.ok) {
         this.log(`check run ${method} failed status=${res.status} report=${report.reportId}`);
-        return;
+        // 403/404 → typical PAT without Checks write (fine-grained offers Commit statuses only)
+        if (res.status === 403 || res.status === 404) return 'fallback';
+        return 'failed';
       }
       try {
         const body = (await res.json()) as { id?: number };
@@ -190,8 +254,60 @@ export class GitHubNotifier implements Notifier, ImpactFeedback {
       this.log(
         `check run ${method === 'POST' ? 'created' : 'updated'} conclusion=${conclusion} report=${report.reportId}`,
       );
+      return 'ok';
     } catch {
       this.log(`check run request error report=${report.reportId}`);
+      return 'failed';
+    }
+  }
+
+  private async postCommitStatus(
+    owner: string,
+    repo: string,
+    report: ImpactReport,
+  ): Promise<void> {
+    const headSha = (report.headSha || '').trim();
+    if (!headSha) {
+      this.log(`commit status skipped: missing headSha report=${report.reportId}`);
+      return;
+    }
+
+    const state = verdictToCommitStatus(report);
+    const description = commitStatusDescription(report);
+    const payload: Record<string, unknown> = {
+      state,
+      context: this.checkName,
+      description,
+    };
+
+    const base = (this.deepLinkBaseUrl || '').trim();
+    if (base) {
+      const links = buildDeepLinks(base, report);
+      if (links.report) payload.target_url = links.report;
+    }
+
+    const url =
+      `${this.apiBaseUrl}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}` +
+      `/statuses/${encodeURIComponent(headSha)}`;
+
+    try {
+      const res = await this.fetchFn(url, {
+        method: 'POST',
+        headers: {
+          ...this.headers(),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        this.log(`commit status failed status=${res.status} report=${report.reportId}`);
+        return;
+      }
+      this.log(
+        `commit status posted state=${state} context=${this.checkName} report=${report.reportId}`,
+      );
+    } catch {
+      this.log(`commit status request error report=${report.reportId}`);
     }
   }
 

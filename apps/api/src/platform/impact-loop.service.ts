@@ -72,7 +72,7 @@ export class ImpactLoopService implements OnModuleInit {
       prFileFetcher,
     });
     this.log.log(
-      'ImpactLoop wired (Phase 3: GitHub check runs + PR comments via GitHubNotifier)',
+      'ImpactLoop wired (Phase 3: GitHub check runs / commit-status fallback + PR comments via GitHubNotifier)',
     );
   }
 
