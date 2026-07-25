@@ -9,6 +9,7 @@ from fastapi import FastAPI, BackgroundTasks
 from pymilvus import Collection, CollectionSchema, DataType, FieldSchema, connections, utility
 
 from release_analyze import analyze_release_change, chat_release_compare
+from impact_narrate import narrate_impact
 from infra_interactions import (
     collection_stats,
     derive_pattern,
@@ -227,6 +228,15 @@ def infra_patterns_derive(body: dict[str, Any]):
 async def release_compare_analyze(body: dict[str, Any]):
     """Doc-aware upgrade recommendations for Raise PR (realtime AWS docs when reachable)."""
     return await analyze_release_change(body or {})
+
+
+@app.post("/impact/narrate")
+def impact_narrate(body: dict[str, Any]):
+    """Evidence-only HOT impact narration. Echoes CLASS; no embeddings / no class invention."""
+    try:
+        return narrate_impact(body or {})
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
 
 
 @app.post("/release-compare/chat")

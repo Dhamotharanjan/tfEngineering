@@ -1,12 +1,13 @@
 import { Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import {
+  createNarratorFromEnv,
   GitHubAdapter,
+  GitHubPrFileFetcher,
   ImpactEngine,
   ImpactLoop,
   loadConfig,
   Neo4jGraphReader,
   PostgresContractStore,
-  TemplateNarrator,
   type RawWebhook,
   type WebhookOutcome,
 } from '@infragraph/platform';
@@ -45,6 +46,8 @@ export class ImpactLoopService implements OnModuleInit {
     const sql = {
       query: <T = any>(text: string, params?: unknown[]) => this.db.query(text, params as any[]),
     };
+    const narrator = createNarratorFromEnv(process.env);
+    const prFileFetcher = GitHubPrFileFetcher.fromEnv(process.env);
     const engine = new ImpactEngine({
       graph: new Neo4jGraphReader(this.cypher),
       subscriptions: this.subscriptions,
@@ -54,7 +57,7 @@ export class ImpactLoopService implements OnModuleInit {
       reports: this.reports,
       jobs: this.jobs,
       notifier: this.notifier,
-      narrator: new TemplateNarrator(),
+      narrator,
       config,
     });
     this.loop = new ImpactLoop({
@@ -62,8 +65,11 @@ export class ImpactLoopService implements OnModuleInit {
       jobs: this.jobs,
       engine,
       config,
+      prFileFetcher,
     });
-    this.log.log('ImpactLoop wired (Phase 1: dual watermark + impact_reports, HOT inline)');
+    this.log.log(
+      'ImpactLoop wired (Phase 2: PR file fetch + evidence-only AI narrator w/ TemplateNarrator fallback)',
+    );
   }
 
   async handleGitHubWebhook(raw: RawWebhook, secret: string | undefined): Promise<WebhookOutcome> {

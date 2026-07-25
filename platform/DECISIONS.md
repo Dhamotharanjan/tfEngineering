@@ -76,3 +76,7 @@ Release/tag webhooks run HOT `tag_impact_query` inline.
 **Phase 1 wiring (dual watermark + reports):** see [PHASE1_WIRING.md](./PHASE1_WIRING.md).
 `last_event_sha` / `indexed_at` / `impact_reports` are live; HOT deep links
 resolve via `GET /impact/reports/:id`.
+
+**Phase 2 wiring (PR file fetch + AI narrator):** see [PHASE2_WIRING.md](./PHASE2_WIRING.md).
+GitHub PR webhooks that omit file lists fetch via API; narration calls
+`services/ai` `/impact/narrate` with TemplateNarrator fallback.

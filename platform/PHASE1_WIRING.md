@@ -45,9 +45,9 @@ HOT (Nest API ImpactLoop / ImpactEngine)
 |---|---|---|
 | Pattern stamps | `EmptyPatternStore` — no disturb notifications from live DB | Phase 4 |
 | Notifier / GitHub check + comment | `LogNotifier` only | Phase 3 |
-| Narrator | `TemplateNarrator` only (no AI service) | Phase 2 / 3 |
-| PR file list fetch | Webhook payloads often omit file paths; HOT may be silent until GitHub API fetch | Phase 2 |
-| Docker API image | Build context still does not copy `platform/`; local `npm install` builds the file dependency | Phase 0 follow-up / ops |
+| Narrator | `TemplateNarrator` only (no AI service) | **Resolved in Phase 2** — see [PHASE2_WIRING.md](./PHASE2_WIRING.md) |
+| PR file list fetch | Webhook payloads often omit file paths; HOT may be silent until GitHub API fetch | **Resolved in Phase 2** — see [PHASE2_WIRING.md](./PHASE2_WIRING.md) |
+| Docker API image | **Done.** See [DOCKER_BUILD.md](./DOCKER_BUILD.md). | — |
 
 ## Tests
 
@@ -67,7 +67,12 @@ docker run --rm -v "<repo>/apps/worker:/app" -w /app golang:1.22 go test ./inter
 
 ## Phase 2 next steps
 
-1. Fetch PR changed files (and optionally contents) when the webhook payload lacks them, so HOT pin-delta analysis is not silently empty.
-2. Wire richer HOT engine paths already in `platform/` against live contracts + Neo4j fan-out end-to-end (beyond routing).
-3. Begin narrator integration against the AI service (or keep template until Phase 3).
-4. Fix Docker build context so `@infragraph/platform` is available in the API image.
+**Phase 2 is done** — see [PHASE2_WIRING.md](./PHASE2_WIRING.md).
+
+Historical checklist (completed):
+
+1. Fetch PR changed files (and contents) when the webhook payload lacks them.
+2. Wire evidence-only AI narrator with `TemplateNarrator` fallback.
+3. ~~Fix Docker build context so `@infragraph/platform` is available in the API image.~~ **Done** — [DOCKER_BUILD.md](./DOCKER_BUILD.md).
+
+Remaining follow-ups moved to Phase 3+ (GitHub check/comment, notifier, patterns).

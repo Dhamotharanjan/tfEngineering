@@ -3,6 +3,8 @@ import type { Job } from '../domain/jobs.ts';
 import { JobIntent } from '../domain/jobs.ts';
 import type { NormalizedVcsEvent } from '../domain/events.ts';
 import { routeEvent } from '../integration/router.ts';
+import type { PrFileFetcher } from '../integration/pr-files.ts';
+import { resolvePrFiles } from '../integration/pr-files.ts';
 import type { SubscriptionReader, JobEnqueuer } from '../ports/index.ts';
 import { ImpactEngine } from '../impact/engine.ts';
 import type { HotQueryInput } from '../impact/engine.ts';
@@ -14,6 +16,8 @@ export interface ImpactLoopDeps {
   jobs: JobEnqueuer;
   engine: ImpactEngine;
   config: PlatformConfig;
+  /** When set, HOT PR path fetches changed files if the webhook omitted them. */
+  prFileFetcher?: PrFileFetcher | null;
 }
 
 export interface WebhookOutcome {
@@ -37,7 +41,7 @@ export class ImpactLoop {
 
   async handleWebhook(adapter: VcsProviderAdapter, raw: RawWebhook, secret: string | undefined): Promise<WebhookOutcome> {
     adapter.verifySignature(raw, secret);
-    const event = adapter.normalize(raw);
+    let event = adapter.normalize(raw);
     if (!event) return { event: null, job: null, skipped: 'unknown_provider_event' };
 
     const sub = await this.deps.subscriptions.resolveByFullName(event.repoFullName);
@@ -46,6 +50,13 @@ export class ImpactLoop {
 
     const job = routeEvent(event, sub.id);
     if (!job) return { event, job: null, skipped: 'ignored' };
+
+    // HOT PR: webhook payloads usually omit file lists — fetch via VCS API when needed.
+    // Fetch failure → empty files (silent / no invented paths); never invent paths.
+    if (job.intent === JobIntent.PR_IMPACT_QUERY) {
+      const resolved = await resolvePrFiles(event, this.deps.prFileFetcher);
+      event = resolved.event;
+    }
 
     return this.dispatch(job, event);
   }

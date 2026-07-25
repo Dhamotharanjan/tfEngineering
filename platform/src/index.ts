@@ -18,7 +18,14 @@ export * from './ports/index.ts';
 // Integration / routing
 export * from './integration/provider.ts';
 export * from './integration/router.ts';
+export * from './integration/pr-files.ts';
 export { GitHubAdapter } from './integration/adapters/github.ts';
+export {
+  GitHubPrFileFetcher,
+  githubApiBaseFromEnv,
+  githubTokenFromEnv,
+} from './integration/adapters/github-pr-files.ts';
+export type { GitHubPrFileFetcherOptions, FetchLike as GitHubFetchLike } from './integration/adapters/github-pr-files.ts';
 export { GitLabAdapter, AzureDevOpsAdapter, BitbucketAdapter } from './integration/adapters/stubs.ts';
 
 // Contracts
@@ -47,6 +54,8 @@ export type { NotifyConfig } from './notify/router.ts';
 // Narration
 export * from './narration/port.ts';
 export { TemplateNarrator } from './narration/template.ts';
+export { HttpAiNarrator, createNarratorFromEnv } from './narration/http-ai.ts';
+export type { HttpAiNarratorOptions } from './narration/http-ai.ts';
 
 // Config
 export * from './config/schema.ts';
