@@ -30,7 +30,7 @@ worker. Complements [README.md](./README.md) "Wiring seams" and [DECISIONS.md](.
 | Notifier | `LogNotifier` logs only; no Slack/email/GitHub check. | Phase 3 |
 | Narrator | `TemplateNarrator` only (no AI service). | Phase 2/3 |
 | PR file list | GitHub PR webhooks often omit file paths; HOT may be silent until files are fetched via GitHub API. | Phase 2 |
-| Docker API image | `apps/api` Dockerfile build context does not yet copy `platform/`; local `npm install` builds the file dependency. Update compose/Dockerfile for image builds. | Phase 0 follow-up |
+| Docker API image | **Done.** Repo-root build context + `apps/api/Dockerfile` copies/builds `platform/`. See [DOCKER_BUILD.md](./DOCKER_BUILD.md). | — |
 | Worker COLD/WARM | Owns parse + Neo4j/Postgres write + `indexed_sha` / `indexed_at` advance. | — |
 
 ## Routing summary
@@ -65,4 +65,4 @@ Historical checklist (completed):
 2. Wire real watermark / report stores (HOT never advances `indexed_sha`).
 3. Read API for deep-linked HOT reports.
 
-Remaining follow-ups moved to Phase 2+ (PR file fetch, notifier, Docker context).
+Remaining follow-ups moved to Phase 2+ (PR file fetch, notifier). Docker API image context is done — see [DOCKER_BUILD.md](./DOCKER_BUILD.md).

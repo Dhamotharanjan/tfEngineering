@@ -69,7 +69,9 @@ services:
     restart: unless-stopped
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     container_name: tfengineering-api
     ports:
       - "8000:8000"

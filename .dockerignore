@@ -1,0 +1,28 @@
+# Keep the API (repo-root) build context lean.
+.git
+**/.git
+**/node_modules
+**/dist
+.data
+data
+.env
+**/.env
+**/.venv
+**/venv
+**/__pycache__
+
+# Large / unrelated trees
+docs/marketing/flyer/*.pdf
+*.mp4
+enterprise_test_fleet/repos
+mvp_demo
+apps/web
+apps/worker
+services
+infrastructure
+
+# IDE / OS
+.vscode
+.idea
+**/.DS_Store
+Thumbs.db
