@@ -1,0 +1,27 @@
+{
+  "_comment": "Example subscription records with FAKE placeholder identities only. The real store is config/repo-subscriptions.json / the subscriptions table.",
+  "repos": [
+    {
+      "id": "example-upstream-module",
+      "githubFullName": "example-org/example-upstream-module",
+      "role": "module_source",
+      "subscribed": true,
+      "contacts": {
+        "primary_team": "example-platform-team",
+        "oncall": "example:oncall-handle"
+      }
+    },
+    {
+      "id": "example-consumer-app",
+      "githubFullName": "example-org/example-consumer-app",
+      "role": "downstream_consumer",
+      "subscribed": true,
+      "appsvn": "EXAMPLE-APPSVN-0001",
+      "moduleSourcesWatched": ["example-org/example-upstream-module"],
+      "contacts": {
+        "owners": "example:consumer-owners",
+        "primary_team": "example-app-team"
+      }
+    }
+  ]
+}

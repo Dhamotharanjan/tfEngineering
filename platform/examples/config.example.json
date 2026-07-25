@@ -1,0 +1,22 @@
+{
+  "_comment": "Example platform config. ALL values are fake placeholders — replace via config file or env. No real repo/org/module/version data lives here.",
+  "deepLinkBaseUrl": "https://infragraph.example.invalid",
+  "iacExtensions": [".tf", ".hcl"],
+  "requireWebhookSecret": true,
+  "policy": {
+    "block": {
+      "onBreaking": true,
+      "onDisturbedPattern": true
+    },
+    "failClosedOnUnknown": false,
+    "notify": {
+      "prAuthorOnImpact": true,
+      "consumerOwnersOnBreakingOrUnknown": true,
+      "architectOnDisturbedPattern": true
+    }
+  },
+  "notify": {
+    "architectRecipients": ["#example-architecture-review"],
+    "ownerContactKeys": ["owners", "oncall", "primary_team"]
+  }
+}

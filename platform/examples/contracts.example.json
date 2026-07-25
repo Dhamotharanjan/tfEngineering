@@ -1,0 +1,26 @@
+{
+  "_comment": "Example module interface contracts with FAKE placeholder versions/inputs. Never imported by runtime code.",
+  "contracts": [
+    {
+      "moduleId": "example-upstream-module",
+      "version": "example-v1",
+      "moduleSource": "git::https://git.example.invalid/example-org/example-upstream-module.git",
+      "variables": [
+        { "name": "example_required_input", "type": "string" },
+        { "name": "example_optional_input", "type": "string", "default": "example-default" }
+      ],
+      "outputs": [{ "name": "example_output" }]
+    },
+    {
+      "moduleId": "example-upstream-module",
+      "version": "example-v2",
+      "moduleSource": "git::https://git.example.invalid/example-org/example-upstream-module.git",
+      "variables": [
+        { "name": "example_required_input", "type": "string" },
+        { "name": "example_optional_input", "type": "string", "default": "example-default" },
+        { "name": "example_new_required_input", "type": "string" }
+      ],
+      "outputs": [{ "name": "example_output" }]
+    }
+  ]
+}

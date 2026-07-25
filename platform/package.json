@@ -1,0 +1,19 @@
+{
+  "name": "@infragraph/platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reference implementation of the InfraGraph impact-loop architecture (COLD / WARM / HOT).",
+  "type": "module",
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"src/**/*.test.ts\"",
+    "test:typed": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.0"
+  }
+}

@@ -1,0 +1,66 @@
+// Public surface of the impact-loop platform module.
+
+// Domain
+export * from './domain/paths.ts';
+export * from './domain/jobs.ts';
+export * from './domain/events.ts';
+export * from './domain/classification.ts';
+export * from './domain/contract.ts';
+export * from './domain/watermark.ts';
+export * from './domain/subscription.ts';
+export * from './domain/pattern.ts';
+export * from './domain/impact.ts';
+export * from './domain/parsed.ts';
+
+// Ports
+export * from './ports/index.ts';
+
+// Integration / routing
+export * from './integration/provider.ts';
+export * from './integration/router.ts';
+export { GitHubAdapter } from './integration/adapters/github.ts';
+export { GitLabAdapter, AzureDevOpsAdapter, BitbucketAdapter } from './integration/adapters/stubs.ts';
+
+// Contracts
+export { fingerprintContract, withFingerprint } from './contracts/fingerprint.ts';
+export { diffContracts } from './contracts/diff.ts';
+
+// Impact engine
+export { ImpactEngine } from './impact/engine.ts';
+export type { EngineDeps, HotQueryInput } from './impact/engine.ts';
+export { classify } from './impact/classifier.ts';
+export { detectStaleness } from './impact/staleness.ts';
+export * from './impact/delta.ts';
+export { SourceResolver } from './impact/source-resolver.ts';
+
+// Pattern guard
+export { guardPattern, disturbingInputs } from './pattern/guard.ts';
+
+// Decision
+export * from './decision/policy.ts';
+export { computeVerdict } from './decision/verdict.ts';
+
+// Notify
+export { resolveRecipients, DEFAULT_NOTIFY_CONFIG } from './notify/router.ts';
+export type { NotifyConfig } from './notify/router.ts';
+
+// Narration
+export * from './narration/port.ts';
+export { TemplateNarrator } from './narration/template.ts';
+
+// Config
+export * from './config/schema.ts';
+export { loadConfig, resolveConfig, DEFAULT_CONFIG } from './config/loader.ts';
+
+// App
+export { ImpactLoop } from './app/impact-loop.ts';
+export type { ImpactLoopDeps, WebhookOutcome } from './app/impact-loop.ts';
+export { ScanRunner } from './app/scan.ts';
+export type { ScanResult } from './app/scan.ts';
+export { applyOverride } from './app/override.ts';
+export * from './app/deep-link.ts';
+
+// Adapters
+export * from './adapters/memory/index.ts';
+export * from './adapters/postgres/index.ts';
+export * from './adapters/neo4j/index.ts';
